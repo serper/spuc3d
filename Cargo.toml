@@ -1,0 +1,56 @@
+[package]
+name = "spuc3d"
+version = "0.1.0"
+edition = "2021"
+
+description = "Librería de renderización 3D sin GPU en Rust"
+authors = ["Sergio"]
+license = "MIT"
+
+[dependencies]
+core_simd = { git = "https://github.com/rust-lang/portable-simd" }
+framebuffer = "0.3.1"
+# Matemáticas y álgebra lineal
+nalgebra = "0.32.3"
+glam = "0.24.1"
+
+# Multiprocesamiento y paralelismo
+rayon = "1.8.0"
+
+# Imágenes y texturas
+image = "0.24.7"
+
+# Utilidades
+thiserror = "1.0.47"
+log = "0.4.20"
+env_logger = "0.10.0"
+ctrlc = "3.2.5"  # Añadir dependencia para manejo de señales
+
+# FFI y sistema operativo
+libc = "0.2"
+ddsfile = "0.5.2"
+bcndecode = "0.2.0"
+
+[features]
+default = ["std", "simd"]  # Habilitamos simd por defecto
+std = []
+simd = []  # Esta característica activará código optimizado para NEON cuando esté disponible
+
+[profile.dev]
+opt-level = 0
+debug = true
+debug-assertions = true
+overflow-checks = true
+
+# Optimizaciones específicas para ARM
+[profile.release]
+opt-level = 3
+lto = "fat"  # Link Time Optimization más agresiva
+codegen-units = 1
+panic = "abort"  # Reducir tamaño binario y mejorar rendimiento
+
+# Configuración específica para target ARM
+[target.armv7-unknown-linux-musleabihf]
+rustflags = [
+  "-C", "target-feature=+neon",
+]
