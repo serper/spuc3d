@@ -5,8 +5,6 @@
 
 pub mod renderer {
     pub mod core {
-        pub mod math_cpu;
-        pub mod math_simd;
         pub mod pipeline;
         pub mod rasterizer;
         pub mod math;

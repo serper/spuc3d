@@ -1,6 +1,6 @@
 use crate::renderer::geometry::Vertex;
 use crate::renderer::texture::Texture;
-use super::math::Maths;
+use crate::renderer::core::math;
 
 #[derive(Clone)]
 pub struct Rasterizer {
@@ -10,8 +10,6 @@ pub struct Rasterizer {
     pub depth_buffer: Vec<f32>,
     pub wireframe_enabled: bool,
     pub wireframe_color: Option<u32>,
-
-    pub maths: Maths,
 }
 
 impl Rasterizer {
@@ -23,7 +21,6 @@ impl Rasterizer {
             depth_buffer: vec![f32::INFINITY; (width * height) as usize],
             wireframe_enabled: false,
             wireframe_color: None,
-            maths: Maths::new(),
         }
     }
 
@@ -190,7 +187,7 @@ impl Rasterizer {
             for y in min_y..=max_y {
                 for x in min_x..=max_x {
                     let point = [x as f32 + 0.5, y as f32 + 0.5];
-                    let (alpha, beta, gamma) = self.maths.compute_barycentric_coordinates(
+                    let (alpha, beta, gamma) = math::compute_barycentric_coordinates(
                         point,
                         [v0.position[0], v0.position[1]],
                         [v1.position[0], v1.position[1]],
@@ -257,7 +254,7 @@ impl Rasterizer {
             for y in min_y..=max_y {
                 for x in min_x..=max_x {
                     let point = [x as f32 + 0.5, y as f32 + 0.5];
-                    let (alpha, beta, gamma) = self.maths.compute_barycentric_coordinates(
+                    let (alpha, beta, gamma) = math::compute_barycentric_coordinates(
                         point,
                         [v0.position[0], v0.position[1]],
                         [v1.position[0], v1.position[1]],

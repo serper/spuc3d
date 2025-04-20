@@ -1,5 +1,5 @@
 use spuc3d::renderer::{core::{
-    pipeline::{Pipeline, TransformationMode}, rasterizer::Rasterizer, transform::Transform
+    pipeline::Pipeline, rasterizer::Rasterizer, transform::Transform
 }, geometry::load_obj};
 use spuc3d::renderer::geometry::{Mesh, Vertex};
 use spuc3d::renderer::shader::DefaultShader;
@@ -670,7 +670,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     
     // Crear rasterizador ajustado a la resolución del framebuffer
     let mut rasterizer = Rasterizer::new(width as u32, height as u32);
-    let enabled = true;
+    let enabled = false;
     let color: u32 = 0xFF0000; // Color rojo
     rasterizer.set_wireframe(enabled, Some(color)); // Color rojo para wireframe
     let clear_color = 0x000022; // Azul muy oscuro
@@ -680,10 +680,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     
     // Crear pipeline con una referencia mutable al rasterizador (sin clonar)
     let mut pipeline = Pipeline::new(shader, &mut rasterizer);
-    
-    // Establecer el modo de transformación a quaternions
-    pipeline.set_transformation_mode(TransformationMode::Quaternion);
-    println!("Pipeline configurado para usar quaternions para las transformaciones");
     
     // Posicionar la cámara en el eje Z negativo para contrarrestar la inversión de la matriz de vista
     let eye = [0.0, 0.0, 4.0];

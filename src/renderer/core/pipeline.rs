@@ -33,9 +33,6 @@ pub struct Pipeline<'a, S: Shader> {
     view_position: Vector,
     view_rotation: Quaternion,
     
-    // Modo de transformación seleccionado
-    transformation_mode: TransformationMode,
-    
     // OPTIMIZACIÓN: Caché de matrices combinadas
     cached_model_view_matrix: Matrix, // Caché de model * view
     cached_mvp_matrix: Matrix,        // Caché de projection * view * model (MVP)
@@ -59,7 +56,7 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         ]);
         
         // Matriz de vista: mirar desde [0,0,5] hacia el origen [0,0,0]
-        let view_matrix = Matrix::new().look_at(
+        let view_matrix = Matrix::look_at(
             &[0.0, 0.0, 5.0],  // posición de la cámara
             &[0.0, 0.0, 0.0],  // punto al que mira la cámara
             &[0.0, 1.0, 0.0]   // vector "arriba" de la cámara
@@ -67,10 +64,6 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         
         // Matriz de proyección perspectiva con parámetros razonables
         let aspect_ratio = rasterizer.width as f32 / rasterizer.height as f32;
-        
-        // Verificar si la cámara está mirando en dirección -Z
-        // En este caso sabemos que sí porque eye.z = 5.0 y target.z = 0.0
-        let looking_along_negative_z = true;
         
         // Ajustar near y far según la dirección de la cámara
         let near = 0.1;
@@ -82,7 +75,7 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         }
         
         // Crear matriz de proyección ajustada a la dirección de la cámara
-        let projection_matrix = Matrix::new().perspective(
+        let projection_matrix = Matrix::perspective(
             std::f32::consts::PI / 4.0,  // 45 grados FOV
             aspect_ratio,
             near,  // near plane
@@ -113,23 +106,14 @@ impl<'a, S: Shader> Pipeline<'a, S> {
             view_matrix,
             projection_matrix,
             coordinate_system: CoordinateSystem::OpenGL,
-            
-            // Campos para transformaciones basadas en quaternions
             model_position,
             model_rotation,
             model_scale,
             view_position,
             view_rotation,
-            
-            // Por defecto, usar el enfoque basado en matrices
-            transformation_mode: TransformationMode::Matrix,
-            
-            // OPTIMIZACIÓN: Inicializar caché
             cached_model_view_matrix,
             cached_mvp_matrix,
             cache_valid: true,
-            
-            // OPTIMIZACIÓN: Valores precalculados para quaternions
             model_rotation_normalized,
             model_rotation_conjugate,
             rotation_precalc_valid: true,
@@ -235,47 +219,45 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         self.invalidate_matrix_cache();
         
         // Si estamos en modo quaternion, extraemos los componentes de la matriz
-        if matches!(self.transformation_mode, TransformationMode::Quaternion) {
-            // Extraer la traslación de la última columna de la matriz
-            let elements = matrix.elements();
-            self.model_position = Vector::new_with_values(
-                elements[0][3], 
-                elements[1][3], 
-                elements[2][3]
-            );
-            
-            // Extraer la rotación como quaternion
-            self.model_rotation = Quaternion::from_rotation_matrix(&elements);
-            
-            // OPTIMIZACIÓN: Invalidar precálculos de quaternion
-            self.invalidate_quaternion_precalc();
-            
-            // Extraer la escala (aproximadamente)
-            // Tomamos la magnitud de los vectores columna de la matriz
-            let scale_x = Vector::new_with_values(
-                elements[0][0],
-                elements[1][0],
-                elements[2][0]
-            ).length();
-            
-            let scale_y = Vector::new_with_values(
-                elements[0][1],
-                elements[1][1],
-                elements[2][1]
-            ).length();
-            
-            let scale_z = Vector::new_with_values(
-                elements[0][2],
-                elements[1][2],
-                elements[2][2]
-            ).length();
-            
-            self.model_scale = Vector::new_with_values(scale_x, scale_y, scale_z);
-            
-            if cfg!(debug_assertions) {
-                println!("Matriz de modelo convertida a quaternion: Pos={:?}, Rot={:?}, Scale={:?}",
-                         self.model_position, self.model_rotation, self.model_scale);
-            }
+        // Extraer la traslación de la última columna de la matriz
+        let elements = matrix.elements();
+        self.model_position = Vector::new_with_values(
+            elements[0][3], 
+            elements[1][3], 
+            elements[2][3]
+        );
+        
+        // Extraer la rotación como quaternion
+        self.model_rotation = Quaternion::from_rotation_matrix(&elements);
+        
+        // OPTIMIZACIÓN: Invalidar precálculos de quaternion
+        self.invalidate_quaternion_precalc();
+        
+        // Extraer la escala (aproximadamente)
+        // Tomamos la magnitud de los vectores columna de la matriz
+        let scale_x = Vector::new_with_values(
+            elements[0][0],
+            elements[1][0],
+            elements[2][0]
+        ).length();
+        
+        let scale_y = Vector::new_with_values(
+            elements[0][1],
+            elements[1][1],
+            elements[2][1]
+        ).length();
+        
+        let scale_z = Vector::new_with_values(
+            elements[0][2],
+            elements[1][2],
+            elements[2][2]
+        ).length();
+        
+        self.model_scale = Vector::new_with_values(scale_x, scale_y, scale_z);
+        
+        if cfg!(debug_assertions) {
+            println!("Matriz de modelo convertida a quaternion: Pos={:?}, Rot={:?}, Scale={:?}",
+                     self.model_position, self.model_rotation, self.model_scale);
         }
     }
     
@@ -286,21 +268,19 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         let world_elements = world_matrix.elements();
         
         // Crear una nueva matriz con los mismos elementos
-        self.model_matrix = Matrix::new_with_values(*world_elements);
+        self.model_matrix = Matrix::new_with_values(world_elements);
         
         // OPTIMIZACIÓN: Invalidar caché de matrices
         self.invalidate_matrix_cache();
         
         // Si estamos usando quaternions, también actualizamos esos componentes
-        if matches!(self.transformation_mode, TransformationMode::Quaternion) {
-            self.model_position = transform.position().clone();
-            self.model_rotation = transform.rotation().clone();
-            
-            // OPTIMIZACIÓN: Invalidar precálculos de quaternion
-            self.invalidate_quaternion_precalc();
-            
-            self.model_scale = transform.scale().clone();
-        }
+        self.model_position = transform.position().clone();
+        self.model_rotation = transform.rotation().clone();
+        
+        // OPTIMIZACIÓN: Invalidar precálculos de quaternion
+        self.invalidate_quaternion_precalc();
+        
+        self.model_scale = transform.scale().clone();
         
         // Depuración: imprimir la matriz para verificar
         if cfg!(debug_assertions) {
@@ -316,59 +296,57 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         self.invalidate_matrix_cache();
         
         // Si estamos en modo quaternion, extraemos los componentes de la matriz de vista
-        if matches!(self.transformation_mode, TransformationMode::Quaternion) {
-            // La matriz de vista es el inverso de la matriz de la cámara
-            // Por lo tanto, necesitamos invertirla para obtener la posición y rotación real
-            
-            // Para extraer la posición de la cámara, debemos considerar que la matriz
-            // de vista es una concatenación de una rotación R y una traslación T:
-            // V = R * T, donde T = translate(-eye)
-            
-            // Extraer la submatriz de rotación 3x3
-            let elements = matrix.elements();
-            let rotation_matrix = [
-                [elements[0][0], elements[0][1], elements[0][2], 0.0],
-                [elements[1][0], elements[1][1], elements[1][2], 0.0],
-                [elements[2][0], elements[2][1], elements[2][2], 0.0],
-                [0.0, 0.0, 0.0, 1.0]
-            ];
-            
-            // Extraer la rotación como quaternion
-            self.view_rotation = Quaternion::from_rotation_matrix(&rotation_matrix);
-            
-            // Para obtener la posición de la cámara (eye), calculamos -R^-1 * t
-            // donde t es el vector de traslación en la matriz de vista
-            let translation = Vector::new_with_values(elements[0][3], elements[1][3], elements[2][3]);
-            
-            // Crear una matriz de rotación a partir de la rotación inversa (transpuesta)
-            let inverse_rotation = [
-                [elements[0][0], elements[1][0], elements[2][0], 0.0],
-                [elements[0][1], elements[1][1], elements[2][1], 0.0],
-                [elements[0][2], elements[1][2], elements[2][2], 0.0],
-                [0.0, 0.0, 0.0, 1.0]
-            ];
-            
-            // Aplicar la rotación inversa a la traslación
-            let mut eye = Vector::new();
-            for i in 0..3 {
-                let mut sum = 0.0;
-                for j in 0..3 {
-                    sum += -inverse_rotation[i][j] * translation.to_array()[j];
-                }
-                match i {
-                    0 => eye = Vector::new_with_values(sum, 0.0, 0.0),
-                    1 => eye = Vector::new_with_values(eye.x(), sum, 0.0),
-                    2 => eye = Vector::new_with_values(eye.x(), eye.y(), sum),
-                    _ => {}
-                }
+        // La matriz de vista es el inverso de la matriz de la cámara
+        // Por lo tanto, necesitamos invertirla para obtener la posición y rotación real
+        
+        // Para extraer la posición de la cámara, debemos considerar que la matriz
+        // de vista es una concatenación de una rotación R y una traslación T:
+        // V = R * T, donde T = translate(-eye)
+        
+        // Extraer la submatriz de rotación 3x3
+        let elements = matrix.elements();
+        let rotation_matrix = [
+            [elements[0][0], elements[0][1], elements[0][2], 0.0],
+            [elements[1][0], elements[1][1], elements[1][2], 0.0],
+            [elements[2][0], elements[2][1], elements[2][2], 0.0],
+            [0.0, 0.0, 0.0, 1.0]
+        ];
+        
+        // Extraer la rotación como quaternion
+        self.view_rotation = Quaternion::from_rotation_matrix(&rotation_matrix);
+        
+        // Para obtener la posición de la cámara (eye), calculamos -R^-1 * t
+        // donde t es el vector de traslación en la matriz de vista
+        let translation = Vector::new_with_values(elements[0][3], elements[1][3], elements[2][3]);
+        
+        // Crear una matriz de rotación a partir de la rotación inversa (transpuesta)
+        let inverse_rotation = [
+            [elements[0][0], elements[1][0], elements[2][0], 0.0],
+            [elements[0][1], elements[1][1], elements[2][1], 0.0],
+            [elements[0][2], elements[1][2], elements[2][2], 0.0],
+            [0.0, 0.0, 0.0, 1.0]
+        ];
+        
+        // Aplicar la rotación inversa a la traslación
+        let mut eye = Vector::new();
+        for i in 0..3 {
+            let mut sum = 0.0;
+            for j in 0..3 {
+                sum += -inverse_rotation[i][j] * translation.to_array()[j];
             }
-            
-            self.view_position = eye;
-            
-            if cfg!(debug_assertions) {
-                println!("Matriz de vista convertida a quaternion: Eye={:?}, Rot={:?}",
-                         self.view_position, self.view_rotation);
+            match i {
+                0 => eye = Vector::new_with_values(sum, 0.0, 0.0),
+                1 => eye = Vector::new_with_values(eye.x(), sum, 0.0),
+                2 => eye = Vector::new_with_values(eye.x(), eye.y(), sum),
+                _ => {}
             }
+        }
+        
+        self.view_position = eye;
+        
+        if cfg!(debug_assertions) {
+            println!("Matriz de vista convertida a quaternion: Eye={:?}, Rot={:?}",
+                     self.view_position, self.view_rotation);
         }
     }
     
@@ -379,49 +357,47 @@ impl<'a, S: Shader> Pipeline<'a, S> {
             println!("look_at: eye={:?}, target={:?}, up={:?}", eye, target, up);
         }
         
-        let view_matrix = Matrix::new().look_at(eye, target, up);
+        let view_matrix = Matrix::look_at(eye, target, up);
         self.view_matrix = view_matrix;
         
         // OPTIMIZACIÓN: Invalidar caché de matrices
         self.invalidate_matrix_cache();
         
         // Actualizar también la posición y rotación de la vista para el modo quaternion
-        if matches!(self.transformation_mode, TransformationMode::Quaternion) {
-            // La posición de la cámara es simplemente el punto eye
-            self.view_position = Vector::new_with_values(eye[0], eye[1], eye[2]);
-            
-            // Calcular la rotación mirando desde eye hacia target
-            // Para calcular la rotación, construimos un sistema de coordenadas ortogonales
-            
-            // 1. Vector dirección normalizado (eye hacia target): -Z en el sistema de la cámara
-            let direction = Vector::new_with_values(
-                target[0] - eye[0],
-                target[1] - eye[1],
-                target[2] - eye[2]
-            ).normalize();
-            
-            // 2. Vector derecha (perpendicular a up y direction): X en el sistema de la cámara
-            let up_vector = Vector::new_with_values(up[0], up[1], up[2]);
-            let right = direction.cross(&up_vector).normalize();
-            
-            // 3. Vector up corregido (perpendicular a direction y right): Y en el sistema de la cámara
-            let corrected_up = right.cross(&direction).normalize();
-            
-            // 4. Construir una matriz de rotación con estos vectores
-            let rotation_matrix = [
-                [right.x(), corrected_up.x(), -direction.x(), 0.0],
-                [right.y(), corrected_up.y(), -direction.y(), 0.0],
-                [right.z(), corrected_up.z(), -direction.z(), 0.0],
-                [0.0, 0.0, 0.0, 1.0]
-            ];
-            
-            // 5. Convertir la matriz de rotación a quaternion
-            self.view_rotation = Quaternion::from_rotation_matrix(&rotation_matrix);
-            
-            if cfg!(debug_assertions) {
-                println!("Look-at convertido a quaternion: Eye={:?}, Rot={:?}", 
-                    self.view_position, self.view_rotation);
-            }
+        // La posición de la cámara es simplemente el punto eye
+        self.view_position = Vector::new_with_values(eye[0], eye[1], eye[2]);
+        
+        // Calcular la rotación mirando desde eye hacia target
+        // Para calcular la rotación, construimos un sistema de coordenadas ortogonales
+        
+        // 1. Vector dirección normalizado (eye hacia target): -Z en el sistema de la cámara
+        let direction = Vector::new_with_values(
+            target[0] - eye[0],
+            target[1] - eye[1],
+            target[2] - eye[2]
+        ).normalize();
+        
+        // 2. Vector derecha (perpendicular a up y direction): X en el sistema de la cámara
+        let up_vector = Vector::new_with_values(up[0], up[1], up[2]);
+        let right = direction.cross(&up_vector).normalize();
+        
+        // 3. Vector up corregido (perpendicular a direction y right): Y en el sistema de la cámara
+        let corrected_up = right.cross(&direction).normalize();
+        
+        // 4. Construir una matriz de rotación con estos vectores
+        let rotation_matrix = [
+            [right.x(), corrected_up.x(), -direction.x(), 0.0],
+            [right.y(), corrected_up.y(), -direction.y(), 0.0],
+            [right.z(), corrected_up.z(), -direction.z(), 0.0],
+            [0.0, 0.0, 0.0, 1.0]
+        ];
+        
+        // 5. Convertir la matriz de rotación a quaternion
+        self.view_rotation = Quaternion::from_rotation_matrix(&rotation_matrix);
+        
+        if cfg!(debug_assertions) {
+            println!("Look-at convertido a quaternion: Eye={:?}, Rot={:?}", 
+                self.view_position, self.view_rotation);
         }
     }
     
@@ -449,7 +425,7 @@ impl<'a, S: Shader> Pipeline<'a, S> {
                  fov_radians * 180.0 / std::f32::consts::PI, aspect_ratio, near, far, inverse_z);
         }
         
-        let projection = Matrix::new().perspective(fov_radians, aspect_ratio, near, far);
+        let projection = Matrix::perspective(fov_radians, aspect_ratio, near, far);
         
         self.projection_matrix = projection;
         
@@ -463,7 +439,7 @@ impl<'a, S: Shader> Pipeline<'a, S> {
 
     /// Configura una matriz de proyección ortográfica
     pub fn set_orthographic(&mut self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) {
-        let projection = Matrix::new().orthographic(left, right, bottom, top, near, far);
+        let projection = Matrix::orthographic(left, right, bottom, top, near, far);
         self.projection_matrix = projection;
         
         // OPTIMIZACIÓN: Invalidar caché de matrices
@@ -479,17 +455,6 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         self.coordinate_system = system;
     }
     
-    /// Establece el modo de transformación a utilizar
-    pub fn set_transformation_mode(&mut self, mode: TransformationMode) {
-        self.transformation_mode = mode;
-        println!("Modo de transformación cambiado a: {:?}", self.transformation_mode);
-    }
-    
-    /// Obtiene el modo de transformación actual
-    pub fn transformation_mode(&self) -> &TransformationMode {
-        &self.transformation_mode
-    }
-
     /// Establece la posición del modelo para el modo quaternion
     pub fn set_model_position(&mut self, position: Vector) {
         self.model_position = position;
@@ -520,24 +485,20 @@ impl<'a, S: Shader> Pipeline<'a, S> {
     /// OPTIMIZACIÓN: Actualiza la matriz de modelo a partir de los componentes quaternion
     fn update_model_matrix_from_quaternion_components(&mut self) {
         // Crear una matriz de rotación a partir del quaternion
-        let rotation_matrix = self.model_rotation.to_rotation_matrix();
-        
+        let model_matrix = self.model_rotation.to_rotation_matrix();
         // Aplicar escala a los vectores columna
-        let mut model_elements = rotation_matrix;
+        let mut elements = model_matrix.elements();
         for i in 0..3 {
-            model_elements[0][i] *= self.model_scale.x();
-            model_elements[1][i] *= self.model_scale.y();
-            model_elements[2][i] *= self.model_scale.z();
+            elements[i][0] *= self.model_scale.x();
+            elements[i][1] *= self.model_scale.y();
+            elements[i][2] *= self.model_scale.z();
         }
-        
         // Aplicar traslación
-        model_elements[0][3] = self.model_position.x();
-        model_elements[1][3] = self.model_position.y();
-        model_elements[2][3] = self.model_position.z();
-        
+        elements[0][3] = self.model_position.x();
+        elements[1][3] = self.model_position.y();
+        elements[2][3] = self.model_position.z();
         // Actualizar la matriz de modelo
-        self.model_matrix = Matrix::new_with_values(model_elements);
-        
+        self.model_matrix = Matrix::new_with_values(elements);
         // Invalidar la caché de matrices
         self.invalidate_matrix_cache();
     }
@@ -565,27 +526,17 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         // 2. La matriz de mundo es una combinación de rotación y traslación
         
         // Crear una matriz de rotación a partir del quaternion de vista
-        let rotation_matrix = self.view_rotation.to_rotation_matrix();
-        
-        // Crear una matriz de traslación para la posición de la cámara
-        let translation_matrix = [
-            [1.0, 0.0, 0.0, self.view_position.x()],
-            [0.0, 1.0, 0.0, self.view_position.y()],
-            [0.0, 0.0, 1.0, self.view_position.z()],
-            [0.0, 0.0, 0.0, 1.0]
-        ];
+        let rotation_matrix = self.view_rotation.to_rotation_matrix().elements();
         
         // La matriz de cámara en el mundo sería rotación * traslación
         // Pero necesitamos la inversa para la vista
-        
         // Primero, la parte de rotación invertida es la transpuesta
-        let rotation_inverse = [
-            [rotation_matrix[0][0], rotation_matrix[1][0], rotation_matrix[2][0], 0.0],
-            [rotation_matrix[0][1], rotation_matrix[1][1], rotation_matrix[2][1], 0.0],
-            [rotation_matrix[0][2], rotation_matrix[1][2], rotation_matrix[2][2], 0.0],
-            [0.0, 0.0, 0.0, 1.0]
-        ];
-        
+        let mut rotation_inverse = [[0.0; 4]; 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                rotation_inverse[i][j] = rotation_matrix[j][i];
+            }
+        }
         // Luego, la traslación invertida es -R^-1 * t
         let mut translation_inverse = [0.0; 3];
         for i in 0..3 {
@@ -593,7 +544,6 @@ impl<'a, S: Shader> Pipeline<'a, S> {
                 translation_inverse[i] -= rotation_inverse[i][j] * self.view_position.to_array()[j];
             }
         }
-        
         // Combinamos para formar la matriz de vista
         let view_elements = [
             [rotation_inverse[0][0], rotation_inverse[0][1], rotation_inverse[0][2], translation_inverse[0]],
@@ -609,35 +559,7 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         self.invalidate_matrix_cache();
     }
     
-    /// Configura el modelo a partir de una transformación, usando el modo de transformación actual
-    pub fn set_model_transform_with_mode(&mut self, transform: &mut Transform) {
-        match self.transformation_mode {
-            TransformationMode::Matrix => {
-                // Usar la versión original basada en matrices
-                self.set_model_transform(transform);
-            },
-            TransformationMode::Quaternion => {
-                // Usar la versión basada en quaternions
-                self.model_position = transform.position().clone();
-                self.model_rotation = transform.rotation().clone();
-                
-                // OPTIMIZACIÓN: Invalidar precálculos de quaternion
-                self.invalidate_quaternion_precalc();
-                
-                self.model_scale = transform.scale().clone();
-                
-                // También actualizamos la matriz por compatibilidad
-                self.set_model_transform(transform);
-                
-                if cfg!(debug_assertions) {
-                    println!("Transformación con quaternions aplicada: Pos={:?}, Rot={:?}, Scale={:?}", 
-                             self.model_position, self.model_rotation, self.model_scale);
-                }
-            }
-        }
-    }
-    
-    // OPTIMIZACIÓN: Métodos para obtener las matrices (útiles para el renderizado de sombras)
+    /// OPTIMIZACIÓN: Métodos para obtener las matrices (útiles para el renderizado de sombras)
     pub fn get_model_matrix(&self) -> Matrix {
         self.model_matrix
     }
@@ -663,103 +585,42 @@ impl<'a, S: Shader> Pipeline<'a, S> {
 
     /// Procesa un vértice a través del pipeline de renderizado    
     pub fn process_vertex(&mut self, vertex: &Vertex) -> VertexOutput {
-        let world_pos: [f32; 4];
-        
-        // OPTIMIZACIÓN: Asegurar que la caché de matrices está actualizada
-        self.update_matrix_cache();
-        
-        // Aplicar transformación de modelo según el modo seleccionado
-        match self.transformation_mode {
-            TransformationMode::Matrix => {
-                // Método tradicional basado en matrices
-                let vertex_position = [vertex.position[0], vertex.position[1], vertex.position[2], 1.0];
-                
-                // Transformación al espacio de mundo
-                world_pos = self.transform_point(&vertex_position, &self.model_matrix);
-                
-                // OPTIMIZACIÓN: Transformar directamente al espacio de clip usando la matriz MVP
-                let clip_pos = self.transform_point(&vertex_position, &self.cached_mvp_matrix);
-                
-                // División de perspectiva para obtener NDC
-                let w = clip_pos[3];
-                
-                // Manejar w cercanos a cero o negativos
-                if w.abs() < 0.001 {
-                    // println!("W muy pequeño: {}", w);
-                    return VertexOutput {
-                        position: [-999.0, -999.0, 0.0, 1.0], // Fuera de pantalla
-                        normal: vertex.normal,
-                        color: vertex.color,
-                        tex_coords: vertex.tex_coords,
-                        world_position: [world_pos[0], world_pos[1], world_pos[2]],
-                    };
-                }
-                
-                let ndc_x = clip_pos[0] / w;
-                let ndc_y = clip_pos[1] / w;
-                let ndc_z = clip_pos[2] / w;
-                
-                // Transformación de NDC a coordenadas de pantalla
-                let screen_x = (ndc_x + 1.0) * 0.5 * self.rasterizer.width as f32;
-                let screen_y = (1.0 - ndc_y) * 0.5 * self.rasterizer.height as f32; // Y invertida para OpenGL
-                let screen_z = (ndc_z + 1.0) * 0.5; // Z de [0, 1] para buffer de profundidad
-                
-                return VertexOutput {
-                    position: [screen_x, screen_y, screen_z, w],
-                    normal: vertex.normal,
-                    color: vertex.color,
-                    tex_coords: vertex.tex_coords,
-                    world_position: [world_pos[0], world_pos[1], world_pos[2]],
-                };
-            },
-            TransformationMode::Quaternion => {
-                // Método basado en quaternions para mayor eficiencia en rotaciones
-                // OPTIMIZACIÓN: Asegurar que los precálculos están actualizados
-                self.update_quaternion_precalc();
-                
-                // Transformación al espacio de mundo con quaternions optimizados
-                world_pos = self.transform_point_quaternion_based_optimized(&vertex.position);
-                
-                // Ahora usar la matriz de vista-proyección para transformar al espacio de clip
-                let view_proj_matrix = self.projection_matrix.multiply(&self.view_matrix);
-                let clip_pos = self.transform_point(&world_pos, &view_proj_matrix);
-                
-                // División de perspectiva para obtener NDC
-                let w = clip_pos[3];
-                
-                // Manejar w cercanos a cero o negativos
-                if w.abs() < 0.001 {
-                    return VertexOutput {
-                        position: [-999.0, -999.0, 0.0, 1.0], // Fuera de pantalla
-                        normal: vertex.normal,
-                        color: vertex.color,
-                        tex_coords: vertex.tex_coords,
-                        world_position: [world_pos[0], world_pos[1], world_pos[2]],
-                    };
-                }
-                
-                let ndc_x = clip_pos[0] / w;
-                let ndc_y = clip_pos[1] / w;
-                let ndc_z = clip_pos[2] / w;
-                
-                // Transformación de NDC a coordenadas de pantalla
-                let screen_x = (ndc_x + 1.0) * 0.5 * self.rasterizer.width as f32;
-                let screen_y = (1.0 - ndc_y) * 0.5 * self.rasterizer.height as f32; // Y invertida para OpenGL
-                let screen_z = (ndc_z + 1.0) * 0.5; // Z de [0, 1] para buffer de profundidad
-                
-                return VertexOutput {
-                    position: [screen_x, screen_y, screen_z, w],
-                    normal: vertex.normal,
-                    color: vertex.color,
-                    tex_coords: vertex.tex_coords,
-                    world_position: [world_pos[0], world_pos[1], world_pos[2]],
-                };
-            }
+        // OPTIMIZACIÓN: Asegurar que los precálculos están actualizados
+        self.update_quaternion_precalc();
+        // Transformación al espacio de mundo con quaternions optimizados
+        let world_pos = self.transform_point_quaternion(&vertex.position);
+        // Ahora usar la matriz de vista-proyección para transformar al espacio de clip
+        let view_proj_matrix = self.projection_matrix.multiply(&self.view_matrix);
+        let clip_pos = self.transform_point(&world_pos, &view_proj_matrix);
+        // División de perspectiva para obtener NDC
+        let w = clip_pos[3];
+        // Manejar w cercanos a cero o negativos
+        if w.abs() < 0.001 {
+            return VertexOutput {
+                position: [-999.0, -999.0, 0.0, 1.0], // Fuera de pantalla
+                normal: vertex.normal,
+                color: vertex.color,
+                tex_coords: vertex.tex_coords,
+                world_position: [world_pos[0], world_pos[1], world_pos[2]],
+            };
+        }
+        let ndc_x = clip_pos[0] / w;
+        let ndc_y = clip_pos[1] / w;
+        let ndc_z = clip_pos[2] / w;
+        // Transformación de NDC a coordenadas de pantalla
+        let screen_x = (ndc_x + 1.0) * 0.5 * self.rasterizer.width as f32;
+        let screen_y = (1.0 - ndc_y) * 0.5 * self.rasterizer.height as f32; // Y invertida para OpenGL
+        let screen_z = (ndc_z + 1.0) * 0.5; // Z de [0, 1] para buffer de profundidad
+        VertexOutput {
+            position: [screen_x, screen_y, screen_z, w],
+            normal: vertex.normal,
+            color: vertex.color,
+            tex_coords: vertex.tex_coords,
+            world_position: [world_pos[0], world_pos[1], world_pos[2]],
         }
     }
 
-    // OPTIMIZACIÓN: Versión optimizada de transform_point_quaternion_based que usa los valores precalculados
-    fn transform_point_quaternion_based_optimized(&self, position: &[f32; 3]) -> [f32; 4] {
+    fn transform_point_quaternion(&self, position: &[f32; 3]) -> [f32; 4] {
         // 1. Escalar el punto primero
         let scaled_x = position[0] * self.model_scale.x();
         let scaled_y = position[1] * self.model_scale.y();
@@ -785,36 +646,6 @@ impl<'a, S: Shader> Pipeline<'a, S> {
         ]
     }
 
-    // Método original para mantener compatibilidad
-    fn transform_point_quaternion_based(&self, position: &[f32; 3]) -> [f32; 4] {
-        // 1. Escalar el punto primero
-        let scaled_x = position[0] * self.model_scale.x();
-        let scaled_y = position[1] * self.model_scale.y();
-        let scaled_z = position[2] * self.model_scale.z();
-
-        // 2. Crear un quaternión puro para el punto escalado
-        let point_quaternion = Quaternion::new_with_values(0.0, scaled_x, scaled_y, scaled_z);
-
-        // 3. Asegurar que el quaternión de rotación esté normalizado
-        let rotation_normalized = self.model_rotation.normalize();
-
-        // 4. Rotar el punto escalado
-        let rotated_quaternion = rotation_normalized
-            .multiply(&point_quaternion)
-            .multiply(&rotation_normalized.conjugate());
-
-        // 5. Extraer el punto rotado
-        let quaternion_array = rotated_quaternion.to_array();
-
-        // 6. Aplicar traslación
-        [
-            quaternion_array[1] + self.model_position.x(),
-            quaternion_array[2] + self.model_position.y(),
-            quaternion_array[3] + self.model_position.z(),
-            1.0
-        ]
-    }
-    
     // Método auxiliar para transformar un punto mediante una matriz
     fn transform_point(&self, point: &[f32; 4], matrix: &Matrix) -> [f32; 4] {
         let mut result = [0.0; 4];
@@ -846,9 +677,7 @@ impl<'a, S: Shader> Pipeline<'a, S> {
     pub fn render(&mut self, mesh: &Mesh, texture: Option<&Texture>) {
         // OPTIMIZACIÓN: Asegurar que las cachés están actualizadas antes de renderizar
         self.update_matrix_cache();
-        if matches!(self.transformation_mode, TransformationMode::Quaternion) {
-            self.update_quaternion_precalc();
-        }
+        self.update_quaternion_precalc();
         
         // Procesar cada triángulo
         for chunk in mesh.indices.chunks(3) {
@@ -923,15 +752,6 @@ pub enum CoordinateSystem {
     Vulkan,
     Metal,
     DirectX,
-}
-
-/// Define el modo de transformación a utilizar en el pipeline
-#[derive(Debug)]
-pub enum TransformationMode {
-    /// Utiliza matrices 4x4 para todas las transformaciones
-    Matrix,
-    /// Utiliza quaternions para rotaciones y vectores para traslación y escala
-    Quaternion,
 }
 
 impl CoordinateSystem {

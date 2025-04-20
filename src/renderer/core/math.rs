@@ -1,450 +1,184 @@
-use std::sync::OnceLock;
-use std::clone::Clone;
+// --- SIMD ---
+use core_simd::simd::f32x4;
+use core_simd::simd::num::SimdFloat;
 
-pub trait MathBackend: Send + Sync {
-    // Métodos para operaciones con vectores
-    fn vector_add(&self, v1: &[f32; 3], v2: &[f32; 3]) -> [f32; 3];
-    fn vector_subtract(&self,v1: &[f32; 3], v2: &[f32; 3]) -> [f32; 3];
-    fn vector_dot(&self,v1: &[f32; 3], v2: &[f32; 3]) -> f32;
-    fn vector_cross(&self,v1: &[f32; 3], v2: &[f32; 3]) -> [f32; 3];
-    fn vector_scale(&self,v: &[f32; 3], scalar: f32) -> [f32; 3];
-    fn vector_length(&self,v: &[f32; 3]) -> f32;
-    fn vector_normalize(&self,v: &[f32; 3]) -> [f32; 3];
-    fn vector_distance(&self,v1: &[f32; 3], v2: &[f32; 3]) -> f32;
-    fn vector_distance_squared(&self,v1: &[f32; 3], v2: &[f32; 3]) -> f32;
-    fn vector_length_squared(&self,v: &[f32; 3]) -> f32;
-    fn vector_angle(&self,v1: &[f32; 3], v2: &[f32; 3]) -> f32;
-    fn vector_project(&self,v: &[f32; 3], onto: &[f32; 3]) -> [f32; 3];
-    fn vector_reflect(&self,v: &[f32; 3], normal: &[f32; 3]) -> [f32; 3];
-    fn vector_refract(&self,v: &[f32; 3], normal: &[f32; 3], eta: f32) -> [f32; 3];
-    fn vector_lerp(&self,v1: &[f32; 3], v2: &[f32; 3], t: f32) -> [f32; 3];
-    fn vector_slerp(&self,v1: &[f32; 3], v2: &[f32; 3], t: f32) -> [f32; 3];
-    fn vector_squad(&self,v1: &[f32; 3], v2: &[f32; 3], v3: &[f32; 3], v4: &[f32; 3], t: f32) -> [f32; 3];
-    fn vector_squad_slerp(&self,v1: &[f32; 3], v2: &[f32; 3], v3: &[f32; 3], v4: &[f32; 3], t: f32) -> [f32; 3];
-    fn vector_to_array(&self,v: &[f32; 3]) -> [f32; 3];
-    fn vector_from_array(&self, arr: &[f32; 3]) -> [f32; 3];
-    fn vector_to_string(&self,v: &[f32; 3]) -> String;
-    fn vector_from_string(&self, s: &str) -> [f32; 3];
-    fn vector_to_tuple(&self,v: &[f32; 3]) -> (f32, f32, f32);
-    fn vector_from_tuple(&self, t: (f32, f32, f32)) -> [f32; 3];
-    fn vector_to_vec(&self,v: &[f32; 3]) -> Vec<f32>;
-    fn vector_from_vec(&self, v: &Vec<f32>) -> [f32; 3];
-    
-    // // Métodos SIMD para procesamiento por lotes
-    // fn batch_transform_points(&self, points: &[[f32; 3]], matrix: &[[f32; 4]; 4]) -> Vec<[f32; 4]>;
-    // fn batch_transform_points_quaternion(&self, 
-    //                                    points: &[[f32; 3]], 
-    //                                    position: &[f32; 3],
-    //                                    rotation: &[f32; 4],  // quaternion como [w, x, y, z]
-    //                                    scale: &[f32; 3]) -> Vec<[f32; 4]>;
-    // fn batch_normalize_vectors(&self, vectors: &[[f32; 3]]) -> Vec<[f32; 3]>;
-    // fn batch_cross_product(&self, vectors_a: &[[f32; 3]], vectors_b: &[[f32; 3]]) -> Vec<[f32; 3]>;
-
-    // Métodos para operaciones con matrices
-    fn matrix_multiply(&self, m1: &[[f32; 4]; 4], m2: &[[f32; 4]; 4]) -> [[f32; 4]; 4];
-    fn matrix_translate(&self, m: &mut [[f32; 4]; 4], tx: f32, ty: f32, tz: f32);
-    fn matrix_scale(&self, m: &mut [[f32; 4]; 4], sx: f32, sy: f32, sz: f32);
-    fn matrix_rotate_x(&self, m: &mut [[f32; 4]; 4], angle: f32);
-    fn matrix_rotate_y(&self, m: &mut [[f32; 4]; 4], angle: f32);
-    fn matrix_rotate_z(&self, m: &mut [[f32; 4]; 4], angle: f32);
-    fn matrix_transpose(&self, m: &[[f32; 4]; 4]) -> [[f32; 4]; 4];
-    fn matrix_inverse(&self, m: &[[f32; 4]; 4]) -> [[f32; 4]; 4];
-    fn matrix_determinant(&self, m: &[[f32; 4]; 4]) -> f32;
-    fn matrix_perspective(&self, fov: f32, aspect: f32, near: f32, far: f32) -> [[f32; 4]; 4];
-    fn matrix_normalize(&self, v: &[f32; 3]) -> [f32; 3];
-    fn matrix_cross(&self, v1: &[f32; 3], v2: &[f32; 3]) -> [f32; 3];
-    fn matrix_dot(&self, v1: &[f32; 3], v2: &[f32; 3]) -> f32;
-    fn matrix_look_at(&self, eye: &[f32; 3], center: &[f32; 3], up: &[f32; 3]) -> [[f32; 4]; 4];
-    fn matrix_orthographic(&self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> [[f32; 4]; 4];
-    fn matrix_frustum(&self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> [[f32; 4]; 4];
-    fn matrix_to_array(&self, m: &[[f32; 4]; 4]) -> [[f32; 4]; 4];
-    fn matrix_from_array(&self, arr: &[[f32; 4]; 4]) -> [[f32; 4]; 4];
-    fn matrix_to_string(&self, m: &[[f32; 4]; 4]) -> String;
-    fn matrix_from_string(&self, s: &str) -> [[f32; 4]; 4];
-    fn matrix_to_tuple(&self, m: &[[f32; 4]; 4]) -> [[f32; 4]; 4];
-    fn matrix_from_tuple(&self, t: [[f32; 4]; 4]) -> [[f32; 4]; 4];
-    fn matrix_to_vec(&self, m: &[[f32; 4]; 4]) -> Vec<f32>;
-    fn matrix_from_vec(&self, v: &Vec<f32>) -> [[f32; 4]; 4];
-    
-    // Métodos para operaciones con cuaterniones
-    fn quaternion_dot(&self, q1: &[f32; 4], q2: &[f32; 4]) -> f32;
-    fn quaternion_multiply(&self, q1: &[f32; 4], q2: &[f32; 4]) -> [f32; 4];
-    fn quaternion_conjugate(&self, q: &[f32; 4]) -> [f32; 4];
-    fn quaternion_normalize(&self, q: &[f32; 4]) -> [f32; 4];
-    fn quaternion_to_matrix(&self, q: &[f32; 4]) -> [[f32; 4]; 4];
-    fn quaternion_from_axis_angle(&self, axis: &[f32; 3], angle: f32) -> [f32; 4];
-    fn quaternion_to_axis_angle(&self, q: &[f32; 4]) -> ([f32; 3], f32);
-    fn quaternion_from_euler(&self, roll: f32, pitch: f32, yaw: f32) -> [f32; 4];
-    fn quaternion_to_euler(&self, q: &[f32; 4]) -> (f32, f32, f32);
-    fn quaternion_from_rotation_matrix(&self, m: &[[f32; 4]; 4]) -> [f32; 4];
-    fn quaternion_to_rotation_matrix(&self, q: &[f32; 4]) -> [[f32; 4]; 4];
-    fn quaternion_lerp(&self, q1: &[f32; 4], q2: &[f32; 4], t: f32) -> [f32; 4];
-    fn quaternion_slerp(&self, q1: &[f32; 4], q2: &[f32; 4], t: f32) -> [f32; 4];
-    fn quaternion_squad(&self, q1: &[f32; 4], q2: &[f32; 4], q3: &[f32; 4], q4: &[f32; 4], t: f32) -> [f32; 4];
-    fn quaternion_squad_slerp(&self, q1: &[f32; 4], q2: &[f32; 4], q3: &[f32; 4], q4: &[f32; 4], t: f32) -> [f32; 4];
-    fn quaternion_to_array(&self, q: &[f32; 4]) -> [f32; 4];
-    fn quaternion_from_array(&self, arr: &[f32; 4]) -> [f32; 4];
-    fn quaternion_to_string(&self, q: &[f32; 4]) -> String;
-    fn quaternion_from_string(&self, s: &str) -> [f32; 4];
-    fn quaternion_to_tuple(&self, q: &[f32; 4]) -> (f32, f32, f32, f32);
-    fn quaternion_from_tuple(&self, t: (f32, f32, f32, f32)) -> [f32; 4];
-    fn quaternion_to_vec(&self, q: &[f32; 4]) -> Vec<f32>;
-    fn quaternion_from_vec(&self, v: &Vec<f32>) -> [f32; 4];
-
-    // Métodos varios
-    fn compute_barycentric_coordinates(&self,point: [f32; 2], v0: [f32; 2], v1: [f32; 2], v2: [f32; 2]) -> (f32, f32, f32);
-}
-
-//Backends soportados
-pub struct CpuMathBackend;
-pub struct SimdMathBackend;
-
-// Función para seleccionar el mejor backend disponible
-pub fn get_optimal_math_backend() -> Box<dyn MathBackend> {
-    #[cfg(feature = "simd")]
-    return Box::new(SimdMathBackend);
-    
-    #[cfg(not(feature = "simd"))]
-    Box::new(CpuMathBackend)
-}
-
-// Implementamos tanto Clone como Copy para Vector
-#[derive(Copy)]
+#[derive(Copy, Clone, Debug)]
 pub struct Vector {
-    x: f32,
-    y: f32,
-    z: f32,
-    backend: &'static dyn MathBackend,
+    simd: f32x4,
 }
 
-// Implementación manual de Clone para Vector
-impl Clone for Vector {
-    fn clone(&self) -> Self {
-        *self // Copy permite usar simplemente *self para clonar
-    }
-}
-
-impl std::fmt::Debug for Vector {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Vector({}, {}, {})", self.x, self.y, self.z)
-    }
-}
 impl Vector {
     pub fn new_with_values(x: f32, y: f32, z: f32) -> Self {
-        // Usar OnceLock para inicializar el backend una sola vez
-        // y compartirlo entre todas las instancias de Vector
-        static BACKEND: OnceLock<Box<dyn MathBackend>> = OnceLock::new();
-        let backend = BACKEND.get_or_init(|| get_optimal_math_backend());
-
-        Self { x, y, z, backend: &**backend }
+        Self { simd: f32x4::from_array([x, y, z, 0.0]) }
     }
-    
     pub fn new() -> Self {
-        // Valor por defecto: vector cero
         Self::new_with_values(0.0, 0.0, 0.0)
     }
-    
-    pub fn x(&self) -> f32 {
-        self.x
-    }
-
-    pub fn y(&self) -> f32 {
-        self.y
-    }
-
-    pub fn z(&self) -> f32 {
-        self.z
-    }
-
+    pub fn x(&self) -> f32 { self.simd[0] }
+    pub fn y(&self) -> f32 { self.simd[1] }
+    pub fn z(&self) -> f32 { self.simd[2] }
     pub fn add(&self, other: &Self) -> Self {
-        Self {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
-            backend: self.backend,
-        }
+        Self { simd: self.simd + other.simd }
     }
-
     pub fn subtract(&self, other: &Self) -> Self {
-        Self {
-            x: self.x - other.x,
-            y: self.y - other.y,
-            z: self.z - other.z,
-            backend: self.backend,
-        }
+        Self { simd: self.simd - other.simd }
     }
-
     pub fn dot(&self, other: &Self) -> f32 {
-        self.backend.vector_dot(&[self.x, self.y, self.z], &[other.x, other.y, other.z])
+        (self.simd * other.simd).reduce_sum()
     }
-
     pub fn cross(&self, other: &Self) -> Self {
-        let result = self.backend.vector_cross(&[self.x, self.y, self.z], &[other.x, other.y, other.z]);
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
-        }
+        let a = self.simd;
+        let b = other.simd;
+        let cross = f32x4::from_array([
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+            0.0,
+        ]);
+        Self { simd: cross }
     }
-
     pub fn add_scalar(&self, scalar: f32) -> Self {
-        Self {
-            x: self.x + scalar,
-            y: self.y + scalar,
-            z: self.z + scalar,
-            backend: self.backend,
-        }
+        Self { simd: self.simd + f32x4::splat(scalar) }
     }
-    
     pub fn subtract_scalar(&self, scalar: f32) -> Self {
-        Self {
-            x: self.x - scalar,
-            y: self.y - scalar,
-            z: self.z - scalar,
-            backend: self.backend,
-        }
+        Self { simd: self.simd - f32x4::splat(scalar) }
     }
-
     pub fn multiply_scalar(&self, scalar: f32) -> Self {
-        Self {
-            x: self.x * scalar,
-            y: self.y * scalar,
-            z: self.z * scalar,
-            backend: self.backend,
-        }
+        Self { simd: self.simd * f32x4::splat(scalar) }
     }
-
     pub fn divide_scalar(&self, scalar: f32) -> Self {
-        if scalar == 0.0 {
-            panic!("Division by zero");
-        }
-        Self {
-            x: self.x / scalar,
-            y: self.y / scalar,
-            z: self.z / scalar,
-            backend: self.backend,
-        }
+        if scalar == 0.0 { panic!("Division by zero"); }
+        Self { simd: self.simd / f32x4::splat(scalar) }
     }
-
     pub fn scale(&self, scalar: f32) -> Self {
-        let result = self.backend.vector_scale(&[self.x, self.y, self.z], scalar);
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
-        }
+        Self { simd: self.simd * f32x4::splat(scalar) }
     }
-
     pub fn length(&self) -> f32 {
-        self.backend.vector_length(&[self.x, self.y, self.z])
+        (self.simd * self.simd).reduce_sum().sqrt()
     }
-
     pub fn length_squared(&self) -> f32 {
-        self.backend.vector_length_squared(&[self.x, self.y, self.z])
+        (self.simd * self.simd).reduce_sum()
     }
-
     pub fn normalize(&self) -> Self {
-        let result = self.backend.vector_normalize(&[self.x, self.y, self.z]);
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
-        }
+        let len = self.length();
+        if len == 0.0 { return Self::new(); }
+        Self { simd: self.simd / f32x4::splat(len) }
     }
-
     pub fn distance(&self, other: &Self) -> f32 {
-        self.backend.vector_distance(&[self.x, self.y, self.z], &[other.x, other.y, other.z])
+        ((self.simd - other.simd) * (self.simd - other.simd)).reduce_sum().sqrt()
     }
-
     pub fn distance_squared(&self, other: &Self) -> f32 {
-        self.backend.vector_distance_squared(&[self.x, self.y, self.z], &[other.x, other.y, other.z])
+        ((self.simd - other.simd) * (self.simd - other.simd)).reduce_sum()
     }
-
     pub fn angle(&self, other: &Self) -> f32 {
-        self.backend.vector_angle(&[self.x, self.y, self.z], &[other.x, other.y, other.z])
+        let dot = self.dot(other);
+        let len1 = self.length();
+        let len2 = other.length();
+        (dot / (len1 * len2)).acos()
     }
-
-    pub fn project(&self, onto: &Self) -> Self {
-        let result = self.backend.vector_project(&[self.x, self.y, self.z], &[onto.x, onto.y, onto.z]);
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
-        }
-    }
-
-    pub fn reflect(&self, normal: &Self) -> Self {
-        let result = self.backend.vector_reflect(&[self.x, self.y, self.z], &[normal.x, normal.y, normal.z]);
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
-        }
-    }
-
-    pub fn refract(&self, normal: &Self, eta: f32) -> Self {
-        let result = self.backend.vector_refract(&[self.x, self.y, self.z], &[normal.x, normal.y, normal.z], eta);
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
-        }
-    }
-
     pub fn lerp(&self, other: &Self, t: f32) -> Self {
-        let result = self.backend.vector_lerp(&[self.x, self.y, self.z], &[other.x, other.y, other.z], t);
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
-        }
+        let vt = f32x4::splat(t);
+        Self { simd: self.simd + (other.simd - self.simd) * vt }
     }
-
     pub fn slerp(&self, other: &Self, t: f32) -> Self {
-        let result = self.backend.vector_slerp(&[self.x, self.y, self.z], &[other.x, other.y, other.z], t);
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
+        let dot = self.dot(other);
+        let theta = dot.acos();
+        let sin_theta = theta.sin();
+        if sin_theta == 0.0 {
+            return self.lerp(other, t);
         }
+        let a = ((1.0 - t) * theta).sin() / sin_theta;
+        let b = (t * theta).sin() / sin_theta;
+        Self { simd: self.simd * f32x4::splat(a) + other.simd * f32x4::splat(b) }
     }
-    
     pub fn squad(&self, v2: &Self, v3: &Self, v4: &Self, t: f32) -> Self {
-        let result = self.backend.vector_squad(
-            &[self.x, self.y, self.z],
-            &[v2.x, v2.y, v2.z],
-            &[v3.x, v3.y, v3.z],
-            &[v4.x, v4.y, v4.z],
-            t,
-        );
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
-        }
+        let a = self.slerp(v2, t);
+        let b = v3.slerp(v4, t);
+        a.lerp(&b, t)
     }
-
     pub fn squad_slerp(&self, v2: &Self, v3: &Self, v4: &Self, t: f32) -> Self {
-        let result = self.backend.vector_squad_slerp(
-            &[self.x, self.y, self.z],
-            &[v2.x, v2.y, v2.z],
-            &[v3.x, v3.y, v3.z],
-            &[v4.x, v4.y, v4.z],
-            t,
-        );
-        Self {
-            x: result[0],
-            y: result[1],
-            z: result[2],
-            backend: self.backend,
+        let a = self.slerp(v2, t);
+        let b = v3.slerp(v4, t);
+        a.slerp(&b, t)
+    }
+    pub fn project(&self, onto: &Self) -> Self {
+        let dot = self.dot(onto);
+        let onto_len2 = onto.length_squared();
+        if onto_len2 == 0.0 { return Self::new(); }
+        let scale = dot / onto_len2;
+        Self { simd: onto.simd * f32x4::splat(scale) }
+    }
+    pub fn reflect(&self, normal: &Self) -> Self {
+        let dot = self.dot(normal);
+        Self { simd: self.simd - normal.simd * f32x4::splat(2.0 * dot) }
+    }
+    pub fn refract(&self, normal: &Self, eta: f32) -> Self {
+        let dot = self.dot(normal);
+        let k = 1.0 - eta * eta * (1.0 - dot * dot);
+        if k < 0.0 {
+            Self::new()
+        } else {
+            Self { simd: self.simd * f32x4::splat(eta) - normal.simd * f32x4::splat(eta * dot + k.sqrt()) }
         }
     }
-
     pub fn to_array(&self) -> [f32; 3] {
-        [self.x, self.y, self.z]
+        let arr = self.simd.to_array();
+        [arr[0], arr[1], arr[2]]
     }
-
-    pub fn from_array(self, arr: &[f32; 3]) -> Self {
-        Self {
-            x: arr[0],
-            y: arr[1],
-            z: arr[2],
-            backend: self.backend,
-        }
+    pub fn from_array(arr: [f32; 3]) -> Self {
+        Self { simd: f32x4::from_array([arr[0], arr[1], arr[2], 0.0]) }
     }
-
-    pub fn to_string(&self) -> String {
-        format!("Vector({}, {}, {})", self.x, self.y, self.z)
-    }
-
-    pub fn from_string(self, s: &str) -> Self {
-        let parts: Vec<&str> = s.trim_matches(|c| c == '(' || c == ')').split(',').collect();
-        if parts.len() != 3 {
-            panic!("Invalid vector string format");
-        }
-        Self {
-            x: parts[0].trim().parse().unwrap(),
-            y: parts[1].trim().parse().unwrap(),
-            z: parts[2].trim().parse().unwrap(),
-            backend: self.backend,
-        }
-    }
-
     pub fn to_tuple(&self) -> (f32, f32, f32) {
-        (self.x, self.y, self.z)
+        let arr = self.simd.to_array();
+        (arr[0], arr[1], arr[2])
     }
-
-    pub fn from_tuple(self, t: (f32, f32, f32)) -> Self {
-        Self {
-            x: t.0,
-            y: t.1,
-            z: t.2,
-            backend: self.backend,
-        }
+    pub fn from_tuple(t: (f32, f32, f32)) -> Self {
+        Self { simd: f32x4::from_array([t.0, t.1, t.2, 0.0]) }
     }
-
     pub fn to_vec(&self) -> Vec<f32> {
-        vec![self.x, self.y, self.z]
+        let arr = self.simd.to_array();
+        vec![arr[0], arr[1], arr[2]]
     }
-    
-    pub fn from_vec(self, v: &Vec<f32>) -> Self {
-        if v.len() != 3 {
-            panic!("Invalid vector length");
-        }
+    pub fn from_vec(v: &Vec<f32>) -> Self {
+        if v.len() != 3 { panic!("Invalid vector length"); }
+        Self { simd: f32x4::from_array([v[0], v[1], v[2], 0.0]) }
+    }
+    pub fn to_string(&self) -> String {
+        let arr = self.simd.to_array();
+        format!("({}, {}, {})", arr[0], arr[1], arr[2])
+    }
+    pub fn from_string(s: &str) -> Self {
+        let parts: Vec<&str> = s.trim_matches(|c| c == '(' || c == ')').split(',').collect();
+        if parts.len() != 3 { panic!("Invalid vector string format"); }
         Self {
-            x: v[0],
-            y: v[1],
-            z: v[2],
-            backend: self.backend,
+            simd: f32x4::from_array([
+                parts[0].trim().parse().unwrap(),
+                parts[1].trim().parse().unwrap(),
+                parts[2].trim().parse().unwrap(),
+                0.0,
+            ])
         }
     }
 }
 
-// Implementamos tanto Clone como Copy para Matrix
-#[derive(Copy)]
+// Matrix SIMD
+#[derive(Copy, Clone, Debug)]
 pub struct Matrix {
-    elements: [[f32; 4]; 4],  // Arrays fijos como [[f32; 4]; 4] ya implementan Copy
-    backend: &'static dyn MathBackend,
-}
-
-// Implementación simplificada de Clone para Matrix
-impl Clone for Matrix {
-    fn clone(&self) -> Self {
-        *self // Ahora podemos simplemente usar *self ya que Matrix implementa Copy
-    }
-}
-
-impl std::fmt::Debug for Matrix {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Matrix [")?;
-        for row in &self.elements {
-            writeln!(f, "  [{:7.4}, {:7.4}, {:7.4}, {:7.4}]", row[0], row[1], row[2], row[3])?;
-        }
-        write!(f, "]")
-    }
+    elements: [f32x4; 4], // 4 filas de 4 elementos
 }
 
 impl Matrix {
     pub fn new_with_values(elements: [[f32; 4]; 4]) -> Self {
-        // Usar OnceLock para inicializar el backend una sola vez
-        // y compartirlo entre todas las instancias de Matrix
-        static BACKEND: OnceLock<Box<dyn MathBackend>> = OnceLock::new();
-        let backend = BACKEND.get_or_init(|| get_optimal_math_backend());
-
-        Self { elements, backend: &**backend }
+        Self {
+            elements: [
+                f32x4::from_array(elements[0]),
+                f32x4::from_array(elements[1]),
+                f32x4::from_array(elements[2]),
+                f32x4::from_array(elements[3]),
+            ],
+        }
     }
-    
     pub fn new() -> Self {
-        // Valor por defecto: matriz identidad
         Self::new_with_values([
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0],
@@ -452,420 +186,471 @@ impl Matrix {
             [0.0, 0.0, 0.0, 1.0],
         ])
     }
-
-    pub fn elements(&self) -> &[[f32; 4]; 4] {
-        &self.elements
-    }
-    
-    pub fn elements_mut(&mut self) -> &mut [[f32; 4]; 4] {
-        &mut self.elements
+    pub fn elements(&self) -> [[f32; 4]; 4] {
+        [
+            self.elements[0].to_array(),
+            self.elements[1].to_array(),
+            self.elements[2].to_array(),
+            self.elements[3].to_array(),
+        ]
     }
 
     pub fn multiply(&self, other: &Self) -> Self {
-        let result = self.backend.matrix_multiply(&self.elements, &other.elements);
-        Self {
-            elements: result,
-            backend: self.backend,
+        let mut result = [f32x4::splat(0.0); 4];
+        
+        // Transposición de la segunda matriz para mejorar el acceso a memoria
+        let other_transposed = [
+            f32x4::from_array([other.elements[0][0], other.elements[1][0], other.elements[2][0], other.elements[3][0]]),
+            f32x4::from_array([other.elements[0][1], other.elements[1][1], other.elements[2][1], other.elements[3][1]]),
+            f32x4::from_array([other.elements[0][2], other.elements[1][2], other.elements[2][2], other.elements[3][2]]),
+            f32x4::from_array([other.elements[0][3], other.elements[1][3], other.elements[2][3], other.elements[3][3]]),
+        ];
+        
+        // Ahora podemos hacer multiplicación de vectores más directamente
+        for i in 0..4 {
+            result[i] = f32x4::from_array([
+                (self.elements[i] * other_transposed[0]).reduce_sum(),
+                (self.elements[i] * other_transposed[1]).reduce_sum(),
+                (self.elements[i] * other_transposed[2]).reduce_sum(),
+                (self.elements[i] * other_transposed[3]).reduce_sum(),
+            ]);
         }
+        Self { elements: result }
     }
-
-    pub fn translate(&mut self, tx: f32, ty: f32, tz: f32) {
-        self.backend.matrix_translate(&mut self.elements, tx, ty, tz);
-    }
-
-    pub fn scale(&mut self, sx: f32, sy: f32, sz: f32) {
-        self.backend.matrix_scale(&mut self.elements, sx, sy, sz);
-    }
-
-    pub fn rotate_x(&mut self, angle: f32) {
-        self.backend.matrix_rotate_x(&mut self.elements, angle);
-    }
-
-    pub fn rotate_y(&mut self, angle: f32) {
-        self.backend.matrix_rotate_y(&mut self.elements, angle);
-    }
-
-    pub fn rotate_z(&mut self, angle: f32) {
-        self.backend.matrix_rotate_z(&mut self.elements, angle);
-    }
-
     pub fn transpose(&self) -> Self {
-
-        let result = self.backend.matrix_transpose(&self.elements);
-        Self {
-            elements: result,
-            backend: self.backend,
+        let m = self.elements();
+        let mut t = [[0.0; 4]; 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                t[j][i] = m[i][j];
+            }
         }
+        Self::new_with_values(t)
     }
-
-    pub fn inverse(&self) -> Self {
-        let result = self.backend.matrix_inverse(&self.elements);
-        Self {
-            elements: result,
-            backend: self.backend,
-        }
-    }
-
-    pub fn determinant(&self) -> f32 {
-        self.backend.matrix_determinant(&self.elements)
-    }
-
-    pub fn perspective(self, fov: f32, aspect: f32, near: f32, far: f32) -> Self {
-        let result = self.backend.matrix_perspective(fov, aspect, near, far);
-        Self {
-            elements: result,
-            backend: self.backend,
-        }
-    }
-
-    pub fn look_at(self, eye: &[f32; 3], center: &[f32; 3], up: &[f32; 3]) -> Self {
-        let result = self.backend.matrix_look_at(eye, center, up);
-        Self {
-            elements: result,
-            backend: self.backend,
-        }
-    }
-    
-    pub fn orthographic(self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
-        let result = self.backend.matrix_orthographic(left, right, bottom, top, near, far);
-        Self {
-            elements: result,
-            backend: self.backend,
-        }
-    }
-    
-    pub fn frustum(self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
-        let result = self.backend.matrix_frustum(left, right, bottom, top, near, far);
-        Self {
-            elements: result,
-            backend: self.backend,
-        }
-    }
-    
     pub fn to_array(&self) -> [[f32; 4]; 4] {
-        self.backend.matrix_to_array(&self.elements)
+        self.elements()
     }
-    
-    pub fn from_array(self, arr: &[[f32; 4]; 4]) -> Self {
-        let result = self.backend.matrix_from_array(arr);
-        Self {
-            elements: result,
-            backend: self.backend,
-        }
+    pub fn from_array(arr: [[f32; 4]; 4]) -> Self {
+        Self::new_with_values(arr)
     }
-    
-    pub fn to_string(&self) -> String {
-        self.backend.matrix_to_string(&self.elements)
-    }
-    
-    pub fn from_string(self, s: &str) -> Self {
-        let result = self.backend.matrix_from_string(s);
-        Self {
-            elements: result,
-            backend: self.backend,
-        }
-    }
-
-    pub fn to_tuple(&self) -> [[f32; 4]; 4] {
-        self.backend.matrix_to_tuple(&self.elements)
-    }
-
-    pub fn from_tuple(self, t: [[f32; 4]; 4]) -> Self {
-        let result = self.backend.matrix_from_tuple(t);
-        Self {
-            elements: result,
-            backend: self.backend,
-        }
-    }
-
     pub fn to_vec(&self) -> Vec<f32> {
-        self.backend.matrix_to_vec(&self.elements)
+        let m = self.elements();
+        m.iter().flat_map(|row| row.iter()).cloned().collect()
     }
-
-    pub fn from_vec(self, v: &Vec<f32>) -> Self {
-        let result = self.backend.matrix_from_vec(v);
-        Self {
-            elements: result,
-            backend: self.backend,
+    pub fn from_vec(v: &Vec<f32>) -> Self {
+        if v.len() != 16 { panic!("Invalid matrix vector format"); }
+        let mut arr = [[0.0; 4]; 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                arr[i][j] = v[i*4 + j];
+            }
         }
+        Self::new_with_values(arr)
+    }
+    pub fn to_string(&self) -> String {
+        let m = self.elements();
+        format!("[[{}, {}, {}, {}], [{}, {}, {}, {}], [{}, {}, {}, {}], [{}, {}, {}, {}]]",
+            m[0][0], m[0][1], m[0][2], m[0][3],
+            m[1][0], m[1][1], m[1][2], m[1][3],
+            m[2][0], m[2][1], m[2][2], m[2][3],
+            m[3][0], m[3][1], m[3][2], m[3][3])
+    }
+    pub fn from_string(s: &str) -> Self {
+        let parts: Vec<&str> = s.trim_matches(|c| c == '[' || c == ']').split("],").collect();
+        if parts.len() != 4 { panic!("Invalid matrix string format"); }
+        let mut arr = [[0.0; 4]; 4];
+        for i in 0..4 {
+            let row_parts: Vec<&str> = parts[i].trim_matches(|c| c == '[' || c == ']').split(',').collect();
+            if row_parts.len() != 4 { panic!("Invalid matrix row format"); }
+            for j in 0..4 {
+                arr[i][j] = row_parts[j].trim().parse().unwrap();
+            }
+        }
+        Self::new_with_values(arr)
+    }
+    // Métodos matemáticos básicos para Matrix
+    pub fn translate(&self, tx: f32, ty: f32, tz: f32) -> Self {
+        let mut m = self.elements();
+        m[0][3] += tx;
+        m[1][3] += ty;
+        m[2][3] += tz;
+        m[3][3] = 1.0;
+        Self::new_with_values(m)
+    }
+    pub fn scale(&self, sx: f32, sy: f32, sz: f32) -> Self {
+        let mut m = self.elements();
+        m[0][0] *= sx;
+        m[1][1] *= sy;
+        m[2][2] *= sz;
+        m[3][3] = 1.0;
+        Self::new_with_values(m)
+    }
+    pub fn rotate_x(&self, angle: f32) -> Self {
+        let cos_angle = angle.cos();
+        let sin_angle = angle.sin();
+        let rotation = Self::new_with_values([
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, cos_angle, -sin_angle, 0.0],
+            [0.0, sin_angle, cos_angle, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]);
+        self.multiply(&rotation)
+    }
+    pub fn rotate_y(&self, angle: f32) -> Self {
+        let cos_angle = angle.cos();
+        let sin_angle = angle.sin();
+        let rotation = Self::new_with_values([
+            [cos_angle, 0.0, sin_angle, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [-sin_angle, 0.0, cos_angle, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]);
+        self.multiply(&rotation)
+    }
+    pub fn rotate_z(&self, angle: f32) -> Self {
+        let cos_angle = angle.cos();
+        let sin_angle = angle.sin();
+        let rotation = Self::new_with_values([
+            [cos_angle, -sin_angle, 0.0, 0.0],
+            [sin_angle, cos_angle, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]);
+        self.multiply(&rotation)
+    }
+    pub fn determinant(&self) -> f32 {
+        let m = self.elements();
+        // Expansión de Laplace para 4x4 (no optimizado, pero correcto)
+        let a = m[0][0]; let b = m[0][1]; let c = m[0][2]; let d = m[0][3];
+        let e = m[1][0]; let f = m[1][1]; let g = m[1][2]; let h = m[1][3];
+        let i = m[2][0]; let j = m[2][1]; let k = m[2][2]; let l = m[2][3];
+        let m0 = m[3][0]; let n = m[3][1]; let o = m[3][2]; let p = m[3][3];
+        a*f*k*p - a*f*l*o - a*g*j*p + a*g*l*n + a*h*j*o - a*h*k*n
+        - b*e*k*p + b*e*l*o + b*g*i*p - b*g*l*m0 - b*h*i*o + b*h*k*m0
+        + c*e*j*p - c*e*l*n - c*f*i*p + c*f*l*m0 + c*h*i*n - c*h*j*m0
+        - d*e*j*o + d*e*k*n + d*f*i*o - d*f*k*m0 - d*g*i*n + d*g*j*m0
+    }
+    pub fn inverse(&self) -> Self {
+        let m = self.elements();
+        let mut inv = [[0.0; 4]; 4];
+        // Algoritmo de inversión de matriz 4x4 (Gauss-Jordan, no optimizado)
+        let mut aug = [[0.0; 8]; 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                aug[i][j] = m[i][j];
+                aug[i][j+4] = if i == j { 1.0 } else { 0.0 };
+            }
+        }
+        for i in 0..4 {
+            let mut max_row = i;
+            for k in (i+1)..4 {
+                if aug[k][i].abs() > aug[max_row][i].abs() {
+                    max_row = k;
+                }
+            }
+            aug.swap(i, max_row);
+            let pivot = aug[i][i];
+            if pivot == 0.0 { panic!("Matrix is not invertible"); }
+            for j in 0..8 {
+                aug[i][j] /= pivot;
+            }
+            for k in 0..4 {
+                if k != i {
+                    let factor = aug[k][i];
+                    for j in 0..8 {
+                        aug[k][j] -= factor * aug[i][j];
+                    }
+                }
+            }
+        }
+        for i in 0..4 {
+            for j in 0..4 {
+                inv[i][j] = aug[i][j+4];
+            }
+        }
+        Self::new_with_values(inv)
+    }
+    // Métodos de proyección y vista
+    pub fn perspective(fov: f32, aspect: f32, near: f32, far: f32) -> Self {
+        let tan_half_fov = (fov / 2.0).tan();
+        let f = 1.0 / tan_half_fov;
+        Self::new_with_values([
+            [f / aspect, 0.0, 0.0, 0.0],
+            [0.0, f, 0.0, 0.0],
+            [0.0, 0.0, -(far + near) / (far - near), -2.0 * far * near / (far - near)],
+            [0.0, 0.0, -1.0, 0.0],
+        ])
+    }
+    pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+        Self::new_with_values([
+            [2.0 / (right - left), 0.0, 0.0, 0.0],
+            [0.0, 2.0 / (top - bottom), 0.0, 0.0],
+            [0.0, 0.0, -2.0 / (far - near), 0.0],
+            [-(right + left) / (right - left), -(top + bottom) / (top - bottom), -(far + near) / (far - near), 1.0],
+        ])
+    }
+    pub fn frustum(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+        let x = 2.0 * near / (right - left);
+        let y = 2.0 * near / (top - bottom);
+        let a = (right + left) / (right - left);
+        let b = (top + bottom) / (top - bottom);
+        let c = -(far + near) / (far - near);
+        let d = -(2.0 * far * near) / (far - near);
+        Self::new_with_values([
+            [x, 0.0, a, 0.0],
+            [0.0, y, b, 0.0],
+            [0.0, 0.0, c, d],
+            [0.0, 0.0, -1.0, 0.0],
+        ])
+    }
+    pub fn look_at(eye: &[f32; 3], center: &[f32; 3], up: &[f32; 3]) -> Self {
+        // Crear vectores SIMD directamente
+        let eye_vec = Vector::new_with_values(eye[0], eye[1], eye[2]);
+        let f = Vector::new_with_values(
+            center[0] - eye[0],
+            center[1] - eye[1],
+            center[2] - eye[2],
+        ).normalize();
+        let s = f.cross(&Vector::new_with_values(up[0], up[1], up[2])).normalize();
+        let u = s.cross(&f);
+        
+        // Calcular dot products de una vez
+        let s_dot_eye = s.dot(&eye_vec);
+        let u_dot_eye = u.dot(&eye_vec);
+        let f_dot_eye = f.dot(&eye_vec);
+        
+        // Construir matriz directamente
+        Self::new_with_values([
+            [s.x(), s.y(), s.z(), -s_dot_eye],
+            [u.x(), u.y(), u.z(), -u_dot_eye],
+            [-f.x(), -f.y(), -f.z(), f_dot_eye],
+            [0.0, 0.0, 0.0, 1.0]
+        ])
     }
 }
 
-// Implementamos tanto Clone como Copy para Quaternion
-#[derive(Copy)]
+#[derive(Copy, Clone, Debug)]
 pub struct Quaternion {
-    w: f32,
-    x: f32,
-    y: f32,
-    z: f32,
-    backend: &'static dyn MathBackend,
-}
-
-// Implementación simplificada de Clone para Quaternion
-impl Clone for Quaternion {
-    fn clone(&self) -> Self {
-        *self // Copy permite usar simplemente *self para clonar
-    }
-}
-
-impl std::fmt::Debug for Quaternion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Quaternion({}, {}, {}, {})", self.w, self.x, self.y, self.z)
-    }
+    simd: f32x4, // [w, x, y, z]
 }
 
 impl Quaternion {
     pub fn new_with_values(w: f32, x: f32, y: f32, z: f32) -> Self {
-        // Usar OnceLock para inicializar el backend una sola vez
-        // y compartirlo entre todas las instancias de Matrix
-        static BACKEND: OnceLock<Box<dyn MathBackend>> = OnceLock::new();
-        let backend = BACKEND.get_or_init(|| get_optimal_math_backend());
-
-        Self {
-            w,
-            x,
-            y,
-            z,
-            backend: &**backend,
-        }
+        Self { simd: f32x4::from_array([w, x, y, z]) }
     }
-    
     pub fn new() -> Self {
-        // Valor por defecto: cuaternión identidad (sin rotación)
         Self::new_with_values(1.0, 0.0, 0.0, 0.0)
     }
-
     pub fn multiply(&self, other: &Self) -> Self {
-        let result = self.backend.quaternion_multiply(
-            &[self.w, self.x, self.y, self.z],
-            &[other.w, other.x, other.y, other.z],
-        );
-        Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: self.backend,
-        }
+        // Multiplicación de cuaterniones optimizada con SIMD
+        // (w1, x1, y1, z1) * (w2, x2, y2, z2)
+        let a = self.simd;
+        let b = other.simd;
+        // Descomponer componentes
+        let w1 = a[0]; let x1 = a[1]; let y1 = a[2]; let z1 = a[3];
+        let w2 = b[0]; let x2 = b[1]; let y2 = b[2]; let z2 = b[3];
+        // Usar SIMD para calcular los productos cruzados y sumas
+        let w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2;
+        let x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2;
+        let y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2;
+        let z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2;
+        Self { simd: f32x4::from_array([w, x, y, z]) }
     }
-    
     pub fn conjugate(&self) -> Self {
-        let result = self.backend.quaternion_conjugate(&[self.w, self.x, self.y, self.z]);
-        Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: self.backend,
-        }
+        let arr = self.simd.to_array();
+        Self { simd: f32x4::from_array([arr[0], -arr[1], -arr[2], -arr[3]]) }
     }
-    
     pub fn normalize(&self) -> Self {
-        let result = self.backend.quaternion_normalize(&[self.w, self.x, self.y, self.z]);
+        let mag2 = (self.simd * self.simd).reduce_sum();
+        let inv_mag = 1.0 / mag2.sqrt();
+        Self { simd: self.simd * f32x4::splat(inv_mag) }
+    }
+    pub fn to_array(&self) -> [f32; 4] {
+        self.simd.to_array()
+    }
+    pub fn lerp(&self, other: &Self, t: f32) -> Self {
+        let vt = f32x4::splat(t);
+        Self { simd: self.simd + (other.simd - self.simd) * vt }
+    }
+    pub fn slerp(&self, other: &Self, t: f32) -> Self {
+        let dot = (self.simd * other.simd).reduce_sum();
+        let mut other_simd = other.simd;
+        let mut dot_val = dot;
+        if dot < 0.0 {
+            other_simd = -other_simd;
+            dot_val = -dot;
+        }
+        if dot_val > 0.9995 {
+            return self.lerp(&Self { simd: other_simd }, t).normalize();
+        }
+        let theta_0 = dot_val.acos();
+        let theta = theta_0 * t;
+        let sin_theta_0 = theta_0.sin();
+        let sin_theta = theta.sin();
+        let s0 = ((theta_0 - theta).sin()) / sin_theta_0;
+        let s1 = sin_theta / sin_theta_0;
+        Self { simd: self.simd * f32x4::splat(s0) + other_simd * f32x4::splat(s1) }
+    }
+    pub fn from_array(arr: [f32; 3]) -> Self {
+        Self { simd: f32x4::from_array([arr[0], arr[1], arr[2], 0.0]) }
+    }
+    pub fn from_tuple(t: (f32, f32, f32)) -> Self {
+        Self { simd: f32x4::from_array([t.0, t.1, t.2, 0.0]) }
+    }
+    pub fn to_tuple(&self) -> (f32, f32, f32) {
+        let arr = self.simd.to_array();
+        (arr[0], arr[1], arr[2])
+    }
+    pub fn to_vec(&self) -> Vec<f32> {
+        let arr = self.simd.to_array();
+        vec![arr[0], arr[1], arr[2]]
+    }
+    pub fn from_vec(v: &Vec<f32>) -> Self {
+        if v.len() != 3 { panic!("Invalid vector length"); }
+        Self { simd: f32x4::from_array([v[0], v[1], v[2], 0.0]) }
+    }
+    pub fn to_string(&self) -> String {
+        let arr = self.simd.to_array();
+        format!("({}, {}, {})", arr[0], arr[1], arr[2])
+    }
+    pub fn from_string(s: &str) -> Self {
+        let parts: Vec<&str> = s.trim_matches(|c| c == '(' || c == ')').split(',').collect();
+        if parts.len() != 3 { panic!("Invalid vector string format"); }
         Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: self.backend,
+            simd: f32x4::from_array([
+                parts[0].trim().parse().unwrap(),
+                parts[1].trim().parse().unwrap(),
+                parts[2].trim().parse().unwrap(),
+                0.0,
+            ])
         }
     }
-
-    pub fn to_matrix(&self) -> [[f32; 4]; 4] {
-        let result = self.backend.quaternion_to_matrix(&[self.w, self.x, self.y, self.z]);
-        result
-    }
-
-    pub fn from_axis_angle(axis: &[f32; 3], angle: f32) -> Self {
-        static BACKEND: OnceLock<Box<dyn MathBackend>> = OnceLock::new();
-        let backend = BACKEND.get_or_init(|| get_optimal_math_backend());
-        let result = backend.quaternion_from_axis_angle(axis, angle);
-        Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: &**backend,
+    pub fn from_rotation_matrix(m: &[[f32; 4]; 4]) -> Self {
+        let trace = m[0][0] + m[1][1] + m[2][2];
+        let (w, x, y, z);
+        if trace > 0.0 {
+            let s = 0.5 / (trace + 1.0).sqrt();
+            w = 0.25 / s;
+            x = (m[2][1] - m[1][2]) * s;
+            y = (m[0][2] - m[2][0]) * s;
+            z = (m[1][0] - m[0][1]) * s;
+        } else if m[0][0] > m[1][1] && m[0][0] > m[2][2] {
+            let s = 2.0 * (1.0 + m[0][0] - m[1][1] - m[2][2]).sqrt();
+            w = (m[2][1] - m[1][2]) / s;
+            x = 0.25 * s;
+            y = (m[0][1] + m[1][0]) / s;
+            z = (m[0][2] + m[2][0]) / s;
+        } else if m[1][1] > m[2][2] {
+            let s = 2.0 * (1.0 + m[1][1] - m[0][0] - m[2][2]).sqrt();
+            w = (m[0][2] - m[2][0]) / s;
+            x = (m[0][1] + m[1][0]) / s;
+            y = 0.25 * s;
+            z = (m[1][2] + m[2][1]) / s;
+        } else {
+            let s = 2.0 * (1.0 + m[2][2] - m[0][0] - m[1][1]).sqrt();
+            w = (m[1][0] - m[0][1]) / s;
+            x = (m[0][2] + m[2][0]) / s;
+            y = (m[1][2] + m[2][1]) / s;
+            z = 0.25 * s;
         }
+        Self { simd: f32x4::from_array([w, x, y, z]) }
     }
-
-    pub fn to_axis_angle(&self) -> ([f32; 3], f32) {
-        let (axis, angle) = self.backend.quaternion_to_axis_angle(&[self.w, self.x, self.y, self.z]);
-        (axis, angle)
+    pub fn from_axis_angle(axis: [f32; 3], angle: f32) -> Self {
+        let half_angle = angle * 0.5;
+        let (sin_half, cos_half) = half_angle.sin_cos();
+        let norm = (axis[0]*axis[0] + axis[1]*axis[1] + axis[2]*axis[2]).sqrt();
+        let (x, y, z) = if norm > 0.0 {
+            (axis[0]/norm, axis[1]/norm, axis[2]/norm)
+        } else {
+            (0.0, 0.0, 0.0)
+        };
+        Self { simd: f32x4::from_array([cos_half, x * sin_half, y * sin_half, z * sin_half]) }
     }
-
     pub fn from_euler(roll: f32, pitch: f32, yaw: f32) -> Self {
-        static BACKEND: OnceLock<Box<dyn MathBackend>> = OnceLock::new();
-        let backend = BACKEND.get_or_init(|| get_optimal_math_backend());
-        let result = backend.quaternion_from_euler(roll, pitch, yaw);
-        Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: &**backend,
-        }
+        // Orden: yaw (Z), pitch (Y), roll (X) - Tait-Bryan angles
+        let (sr, cr) = (roll * 0.5).sin_cos();
+        let (sp, cp) = (pitch * 0.5).sin_cos();
+        let (sy, cy) = (yaw * 0.5).sin_cos();
+        let w = cr * cp * cy + sr * sp * sy;
+        let x = sr * cp * cy - cr * sp * sy;
+        let y = cr * sp * cy + sr * cp * sy;
+        let z = cr * cp * sy - sr * sp * cy;
+        Self { simd: f32x4::from_array([w, x, y, z]) }
     }
-
     pub fn to_euler(&self) -> (f32, f32, f32) {
-        let (roll, pitch, yaw) = self.backend.quaternion_to_euler(&[self.w, self.x, self.y, self.z]);
+        // Devuelve (roll, pitch, yaw) en radianes, evitando bloqueo de gimbal
+        let arr = self.simd.to_array();
+        let (w, x, y, z) = (arr[0], arr[1], arr[2], arr[3]);
+        // Pitch (Y)
+        let sinp = 2.0 * (w * y - z * x);
+        let pitch = if sinp.abs() >= 1.0 {
+            sinp.signum() * (std::f32::consts::PI / 2.0)
+        } else {
+            sinp.asin()
+        };
+        // Roll (X)
+        let sinr_cosp = 2.0 * (w * x + y * z);
+        let cosr_cosp = 1.0 - 2.0 * (x * x + y * y);
+        let roll = sinr_cosp.atan2(cosr_cosp);
+        // Yaw (Z)
+        let siny_cosp = 2.0 * (w * z + x * y);
+        let cosy_cosp = 1.0 - 2.0 * (y * y + z * z);
+        let yaw = siny_cosp.atan2(cosy_cosp);
         (roll, pitch, yaw)
     }
-
-    pub fn from_rotation_matrix(m: &[[f32; 4]; 4]) -> Self {
-        static BACKEND: OnceLock<Box<dyn MathBackend>> = OnceLock::new();
-        let backend = BACKEND.get_or_init(|| get_optimal_math_backend());
-        let result = backend.quaternion_from_rotation_matrix(m);
-        Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: &**backend,
-        }
-    }
-
-    pub fn to_rotation_matrix(&self) -> [[f32; 4]; 4] {
-        let result = self.backend.quaternion_to_rotation_matrix(&[self.w, self.x, self.y, self.z]);
-        result
-    }
-
-    pub fn slerp(&self, other: &Self, t: f32) -> Self {
-        let result = self.backend.quaternion_slerp(
-            &[self.w, self.x, self.y, self.z],
-            &[other.w, other.x, other.y, other.z],
-            t,
-        );
-        Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: self.backend,
-        }
-    }
-
-    pub fn squad(&self, q2: &Self, q3: &Self, q4: &Self, t: f32) -> Self {
-        let result = self.backend.quaternion_squad(
-            &[self.w, self.x, self.y, self.z],
-            &[q2.w, q2.x, q2.y, q2.z],
-            &[q3.w, q3.x, q3.y, q3.z],
-            &[q4.w, q4.x, q4.y, q4.z],
-            t,
-        );
-        Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: self.backend,
-        }
-    }
-
-    pub fn squad_slerp(&self, q2: &Self, q3: &Self, q4: &Self, t: f32) -> Self {
-        let result = self.backend.quaternion_squad_slerp(
-            &[self.w, self.x, self.y, self.z],
-            &[q2.w, q2.x, q2.y, q2.z],
-            &[q3.w, q3.x, q3.y, q3.z],
-            &[q4.w, q4.x, q4.y, q4.z],
-            t,
-        );
-        Self {
-            w: result[0],
-            x: result[1],
-            y: result[2],
-            z: result[3],
-            backend: self.backend,
-        }
-    }
-
-    pub fn to_array(&self) -> [f32; 4] {
-        [self.w, self.x, self.y, self.z]
-    }
-
-    pub fn from_array(self, arr: &[f32; 4]) -> Self {
-        Self {
-            w: arr[0],
-            x: arr[1],
-            y: arr[2],
-            z: arr[3],
-            backend: self.backend,
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        format!("Quaternion({}, {}, {}, {})", self.w, self.x, self.y, self.z)
-    }
-
-    pub fn from_string(self, s: &str) -> Self {
-        let parts: Vec<&str> = s.trim_matches(|c| c == '(' || c == ')').split(',').collect();
-        if parts.len() != 4 {
-            panic!("Invalid quaternion string format");
-        }
-        Self {
-            w: parts[0].trim().parse().unwrap(),
-            x: parts[1].trim().parse().unwrap(),
-            y: parts[2].trim().parse().unwrap(),
-            z: parts[3].trim().parse().unwrap(),
-            backend: self.backend,
-        }
-    }
-
-    pub fn to_tuple(&self) -> (f32, f32, f32, f32) {
-        (self.w, self.x, self.y, self.z)
-    }
-
-    pub fn from_tuple(self, t: (f32, f32, f32, f32)) -> Self {
-        Self {
-            w: t.0,
-            x: t.1,
-            y: t.2,
-            z: t.3,
-            backend: self.backend,
-        }
-    }
-
-    pub fn to_vec(&self) -> Vec<f32> {
-        vec![self.w, self.x, self.y, self.z]
-    }
-
-    pub fn from_vec(self, v: &Vec<f32>) -> Self {
-        if v.len() != 4 {
-            panic!("Invalid quaternion length");
-        }
-        Self {
-            w: v[0],
-            x: v[1],
-            y: v[2],
-            z: v[3],
-            backend: self.backend,
-        }
-    }
-
-}
-
-#[derive(Copy)]
-pub struct Maths {
-    backend: &'static dyn MathBackend,
-}
-
-// Implementación manual de Clone para Maths
-impl Clone for Maths {
-    fn clone(&self) -> Self {
-        *self // Copy permite usar simplemente *self para clonar
+    pub fn to_rotation_matrix(&self) -> Matrix {
+        let arr = self.simd.to_array();
+        let (w, x, y, z) = (arr[0], arr[1], arr[2], arr[3]);
+        Matrix::new_with_values([
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - w * z),     2.0 * (x * z + w * y),     0.0],
+            [2.0 * (x * y + w * z),       1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - w * x),     0.0],
+            [2.0 * (x * z - w * y),       2.0 * (y * z + w * x),     1.0 - 2.0 * (x * x + y * y), 0.0],
+            [0.0,                        0.0,                        0.0,                        1.0],
+        ])
     }
 }
 
-impl Maths {
-    pub fn new() -> Self {
-        // Usar OnceLock para inicializar el backend una sola vez
-        // y compartirlo entre todas las instancias de Vector
-        static BACKEND: OnceLock<Box<dyn MathBackend>> = OnceLock::new();
-        let backend = BACKEND.get_or_init(|| get_optimal_math_backend());
+// pub fn compute_barycentric_coordinates(point: [f32; 2], v0: [f32; 2], v1: [f32; 2], v2: [f32; 2]) -> (f32, f32, f32) {
+//     // Área del triángulo completo
+//     let area = (v1[0] - v0[0]) * (v2[1] - v0[1]) - (v2[0] - v0[0]) * (v1[1] - v0[1]);
+//     if area.abs() < 1e-6 {
+//         return (0.0, 0.0, 0.0);
+//     }
+//     // Coordenadas baricéntricas
+//     let alpha = ((v1[0] - point[0]) * (v2[1] - point[1]) - (v2[0] - point[0]) * (v1[1] - point[1])) / area;
+//     let beta  = ((v2[0] - point[0]) * (v0[1] - point[1]) - (v0[0] - point[0]) * (v2[1] - point[1])) / area;
+//     let gamma = 1.0 - alpha - beta;
+//     (alpha, beta, gamma)
+// }
 
-        Self { backend: &**backend }
+pub fn compute_barycentric_coordinates(point: [f32; 2], v0: [f32; 2], v1: [f32; 2], v2: [f32; 2]) -> (f32, f32, f32) {
+    // Usar SIMD para calcular vectores y productos cruzados 2D
+    let p = f32x4::from_array([point[0], point[1], 0.0, 0.0]);
+    let a = f32x4::from_array([v0[0], v0[1], 0.0, 0.0]);
+    let b = f32x4::from_array([v1[0], v1[1], 0.0, 0.0]);
+    let c = f32x4::from_array([v2[0], v2[1], 0.0, 0.0]);
+    
+    // Área del triángulo (v1-v0) x (v2-v0)
+    let v0_to_v1 = b - a;
+    let v0_to_v2 = c - a;
+    
+    // Área usando producto cruz 2D
+    let area = v0_to_v1[0] * v0_to_v2[1] - v0_to_v1[1] * v0_to_v2[0];
+    
+    if area.abs() < 1e-6 {
+        return (0.0, 0.0, 0.0);
     }
-    pub fn compute_barycentric_coordinates(&self, point: [f32; 2], v0: [f32; 2], v1: [f32; 2], v2: [f32; 2]) -> (f32, f32, f32) {
-        self.backend.compute_barycentric_coordinates(point, v0, v1, v2)
-    }
+    
+    // Vectores desde vértices al punto
+    let v1_to_v2 = c - b;
+    let p_to_a = a - p;
+    let p_to_b = b - p;
+    let p_to_c = c - p;
+    
+    // Cálculo de coordenadas baricéntricas mediante áreas
+    let alpha = (p_to_b[0] * p_to_c[1] - p_to_c[0] * p_to_b[1]) / area;
+    let beta = (p_to_c[0] * p_to_a[1] - p_to_a[0] * p_to_c[1]) / area;
+    let gamma = 1.0 - alpha - beta;
+    
+    (alpha, beta, gamma)
 }

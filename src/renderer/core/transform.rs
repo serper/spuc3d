@@ -110,23 +110,21 @@ impl Transform {
     
     /// Rota alrededor del eje X
     pub fn rotate_x(&mut self, angle: f32) -> &mut Self {
-        let rotation = Quaternion::from_axis_angle(&[1.0, 0.0, 0.0], angle);
+        let rotation = Quaternion::from_axis_angle([1.0, 0.0, 0.0], angle);
         self.rotation = rotation.multiply(&self.rotation);
         self.mark_dirty();
         self
     }
-    
     /// Rota alrededor del eje Y
     pub fn rotate_y(&mut self, angle: f32) -> &mut Self {
-        let rotation = Quaternion::from_axis_angle(&[0.0, 1.0, 0.0], angle);
+        let rotation = Quaternion::from_axis_angle([0.0, 1.0, 0.0], angle);
         self.rotation = rotation.multiply(&self.rotation);
         self.mark_dirty();
         self
     }
-    
     /// Rota alrededor del eje Z
     pub fn rotate_z(&mut self, angle: f32) -> &mut Self {
-        let rotation = Quaternion::from_axis_angle(&[0.0, 0.0, 1.0], angle);
+        let rotation = Quaternion::from_axis_angle([0.0, 0.0, 1.0], angle);
         self.rotation = rotation.multiply(&self.rotation);
         self.mark_dirty();
         self
@@ -191,20 +189,14 @@ impl Transform {
     /// Actualiza la matriz local
     fn update_local_matrix(&mut self) {
         // Crear matriz de escala
-        let mut scale_matrix = Matrix::new();
-        scale_matrix.scale(self.scale.x(), self.scale.y(), self.scale.z());
-        
+        let scale_matrix = Matrix::new().scale(self.scale.x(), self.scale.y(), self.scale.z());
         // Crear matriz de rotación a partir del cuaternión
         let rotation_matrix = self.rotation.to_rotation_matrix();
-        
         // Crear matriz de traslación
-        let mut translation_matrix = Matrix::new();
-        translation_matrix.translate(self.position.x(), self.position.y(), self.position.z());
-        
+        let translation_matrix = Matrix::new().translate(self.position.x(), self.position.y(), self.position.z());
         // Combinar las matrices: Translation * Rotation * Scale
-        let temp = Matrix::new_with_values(rotation_matrix).multiply(&Matrix::new_with_values(*scale_matrix.elements()));
+        let temp = rotation_matrix.multiply(&scale_matrix);
         self.local_matrix = translation_matrix.multiply(&temp);
-        
         self.is_local_matrix_dirty = false;
     }
     
@@ -223,31 +215,13 @@ impl Transform {
                     self.update_local_matrix();
                 }
                 let result_matrix = parent.world_matrix.multiply(&self.local_matrix);
-                let result_elements = result_matrix.elements();
-                let world_elements = self.world_matrix.elements_mut();
-                for i in 0..4 {
-                    for j in 0..4 {
-                        world_elements[i][j] = result_elements[i][j];
-                    }
-                }
+                self.world_matrix = result_matrix;
             } else {
                 // Si el padre ya no existe, usar la local
-                let local_elements = self.local_matrix.elements();
-                let world_elements = self.world_matrix.elements_mut();
-                for i in 0..4 {
-                    for j in 0..4 {
-                        world_elements[i][j] = local_elements[i][j];
-                    }
-                }
+                self.world_matrix = self.local_matrix;
             }
         } else {
-            let local_elements = self.local_matrix.elements();
-            let world_elements = self.world_matrix.elements_mut();
-            for i in 0..4 {
-                for j in 0..4 {
-                    world_elements[i][j] = local_elements[i][j];
-                }
-            }
+            self.world_matrix = self.local_matrix;
         }
         self.is_world_matrix_dirty = false;
     }
