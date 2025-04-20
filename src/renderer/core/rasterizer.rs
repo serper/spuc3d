@@ -1,8 +1,10 @@
 use crate::renderer::geometry::Vertex;
 use crate::renderer::texture::Texture;
 use crate::renderer::core::math;
+use crate::renderer::core::pipeline::TileBuffer;
+use core_simd::simd::{f32x8, u32x8};
+use core_simd::simd::cmp::SimdPartialOrd;
 
-#[derive(Clone)]
 pub struct Rasterizer {
     pub width: u32,
     pub height: u32,
@@ -27,7 +29,7 @@ impl Rasterizer {
     pub fn clear(&mut self, color: u32, depth: f32) {
         self.color_buffer.fill(color);
         self.depth_buffer.fill(depth);
-    }    
+    }
 
     pub fn set_wireframe(&mut self, enabled: bool, color: Option<u32>) {
         self.wireframe_enabled = enabled;
@@ -36,19 +38,16 @@ impl Rasterizer {
     
     pub fn set_pixel(&mut self, x: u32, y: u32, color: u32, depth: f32) {
         let index = (y * self.width + x) as usize;
-        // Verificar si estamos dentro de los límites del buffer
         if index < self.color_buffer.len() {
-            // En gráficos 3D, normalmente queremos conservar el objeto más cercano (menor Z)
-            // Si depth == 0.0, siempre dibujamos el pixel (para debug)
-            if /*depth == 0.0 ||*/ depth < self.depth_buffer[index] {
+            if depth < self.depth_buffer[index] {
                 self.depth_buffer[index] = depth;
                 self.color_buffer[index] = color;
             }
         }
     }
 
-    pub fn get_color_buffer(&self) -> &[u32] {
-        &self.color_buffer
+    pub fn get_color_buffer(&self) -> Vec<u32> {
+        self.color_buffer.clone()
     }
 
     /// Dibuja una línea utilizando el algoritmo de Bresenham con interpolación de profundidad
@@ -274,6 +273,79 @@ impl Rasterizer {
                     }
                 }
             }
+        }
+    }
+
+    /// Fusiona los tiles locales al buffer global del rasterizador
+    pub fn merge_tile(&mut self, tile: &TileBuffer) {
+        let simd_width = 8;
+        let tile_len = (tile.width * tile.height) as usize;
+        let mut i = 0;
+        while i + simd_width <= tile_len {
+            let t_depth = f32x8::from_array([
+                tile.depth_buffer[i],
+                tile.depth_buffer[i + 1],
+                tile.depth_buffer[i + 2],
+                tile.depth_buffer[i + 3],
+                tile.depth_buffer[i + 4],
+                tile.depth_buffer[i + 5],
+                tile.depth_buffer[i + 6],
+                tile.depth_buffer[i + 7],
+            ]);
+            let t_color = u32x8::from_array([
+                tile.color_buffer[i],
+                tile.color_buffer[i + 1],
+                tile.color_buffer[i + 2],
+                tile.color_buffer[i + 3],
+                tile.color_buffer[i + 4],
+                tile.color_buffer[i + 5],
+                tile.color_buffer[i + 6],
+                tile.color_buffer[i + 7],
+            ]);
+            let mut g_depth = f32x8::from_array([
+                self.depth_buffer[i],
+                self.depth_buffer[i + 1],
+                self.depth_buffer[i + 2],
+                self.depth_buffer[i + 3],
+                self.depth_buffer[i + 4],
+                self.depth_buffer[i + 5],
+                self.depth_buffer[i + 6],
+                self.depth_buffer[i + 7],
+            ]);
+            let mut g_color = u32x8::from_array([
+                self.color_buffer[i],
+                self.color_buffer[i + 1],
+                self.color_buffer[i + 2],
+                self.color_buffer[i + 3],
+                self.color_buffer[i + 4],
+                self.color_buffer[i + 5],
+                self.color_buffer[i + 6],
+                self.color_buffer[i + 7],
+            ]);
+            let mask = t_depth.simd_lt(g_depth);
+            g_depth = mask.select(t_depth, g_depth);
+            g_color = mask.select(t_color, g_color);
+            let g_depth_arr = g_depth.to_array();
+            let g_color_arr = g_color.to_array();
+            for j in 0..simd_width {
+                self.depth_buffer[i + j] = g_depth_arr[j];
+                self.color_buffer[i + j] = g_color_arr[j];
+            }
+            i += simd_width;
+        }
+        // Resto escalar
+        while i < tile_len {
+            let gx = tile.x + (i as u32 % tile.width);
+            let gy = tile.y + (i as u32 / tile.width);
+            if gx < self.width && gy < self.height {
+                let global_idx = (gy * self.width + gx) as usize;
+                let tile_depth = tile.depth_buffer[i];
+                if tile_depth < self.depth_buffer[global_idx] {
+                    self.depth_buffer[global_idx] = tile_depth;
+                    self.color_buffer[global_idx] = tile.color_buffer[i];
+                }
+            }
+            i += 1;
         }
     }
 }

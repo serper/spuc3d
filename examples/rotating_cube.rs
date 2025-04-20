@@ -579,44 +579,6 @@ fn create_checkerboard_texture(width: u32, height: u32) -> Texture {
     Texture::new(width, height, data)
 }
 
-fn debug_render_points(pipeline: &mut Pipeline<DefaultShader>) {
-    // Crear puntos en posiciones específicas
-    let points = [
-        Vertex { position: [0.0, 0.0, 0.0], normal: [0.0, 0.0, 1.0], tex_coords: [0.0, 0.0], color: [1.0, 0.0, 0.0, 1.0] }, // Origen (rojo)
-        Vertex { position: [1.0, 0.0, 0.0], normal: [0.0, 0.0, 1.0], tex_coords: [0.0, 0.0], color: [0.0, 1.0, 0.0, 1.0] }, // X (verde)
-        Vertex { position: [0.0, 1.0, 0.0], normal: [0.0, 0.0, 1.0], tex_coords: [0.0, 0.0], color: [0.0, 0.0, 1.0, 1.0] }, // Y (azul)
-        Vertex { position: [0.0, 0.0, 1.0], normal: [0.0, 0.0, 1.0], tex_coords: [0.0, 0.0], color: [1.0, 1.0, 0.0, 1.0] }, // Z (amarillo)
-    ];
-
-    // Dibuja puntos grandes para visualizarlos fácilmente
-    let processed_points: Vec<_> = points.iter().map(|point| pipeline.process_vertex(point)).collect();
-    let rasterizer = pipeline.rasterizer_mut();
-    for processed in processed_points {
-        if processed.position[0] >= 0.0 && processed.position[0] < rasterizer.width as f32 &&
-           processed.position[1] >= 0.0 && processed.position[1] < rasterizer.height as f32 {
-            // Dibuja un punto grande
-            let x = processed.position[0] as u32;
-            let y = processed.position[1] as u32;
-            let z = processed.position[2];
-            let color = ((processed.color[0] * 255.0) as u32) << 16 |
-                        ((processed.color[1] * 255.0) as u32) << 8 |
-                        ((processed.color[2] * 255.0) as u32);
-            
-            // Dibujar un punto grande (5x5 píxeles)
-            for dx in -2..=2 {
-                for dy in -2..=2 {
-                    let px = x as i32 + dx;
-                    let py = y as i32 + dy;
-                    if px >= 0 && px < rasterizer.width as i32 &&
-                       py >= 0 && py < rasterizer.height as i32 {
-                        rasterizer.set_pixel(px as u32, py as u32, color, z);
-                    }
-                }
-            }
-        }
-    }
-}
-
 // Función para mostrar una animación de objetos relacionados jerárquicamente
 fn main() -> Result<(), Box<dyn Error>> {
     // Configuramos el logger
@@ -695,32 +657,32 @@ fn main() -> Result<(), Box<dyn Error>> {
     pipeline.set_perspective(fov, aspect_ratio, near, far);
     
     // Crear las geometrías
-    let cube = create_cube();
-    let pyramid = create_pyramid();
-    let sphere = create_sphere(0.5, 2); // Radio 0.5, 1 subdivisión
+    // let cube = create_cube();
+    // let pyramid = create_pyramid();
+    // let sphere = create_sphere(0.5, 2); // Radio 0.5, 1 subdivisión
     let plane = load_obj("airplane.obj", true, false)?;
     
-    // Crear textura de tablero de ajedrez
-    let texture_enabled = true; // Cambiar a true para usar la textura
-    let checkerboard_texture_data = create_checkerboard_texture(256, 256);
-    let checkerboard_texture = if texture_enabled {
-            Some(&checkerboard_texture_data)
-        } else {
-            None
-        };
+    // // Crear textura de tablero de ajedrez
+    // let texture_enabled = true; // Cambiar a true para usar la textura
+    // let checkerboard_texture_data = create_checkerboard_texture(256, 256);
+    // let checkerboard_texture = if texture_enabled {
+    //         Some(&checkerboard_texture_data)
+    //     } else {
+    //         None
+    //     };
     
     // Crear transformaciones para objetos como Rc<RefCell<Transform>>
     let root_transform = Transform::new();
     let sun_transform = Transform::new();
-    let planet_transform = Transform::new();
-    let moon_transform = Transform::new();
-    let satellite_transform = Transform::new();
+    // let planet_transform = Transform::new();
+    // let moon_transform = Transform::new();
+    // let satellite_transform = Transform::new();
     
     // Configurar jerarquía de transformaciones
     Transform::set_parent(&sun_transform, Some(&root_transform));
-    Transform::set_parent(&planet_transform, Some(&sun_transform));
-    Transform::set_parent(&moon_transform, Some(&planet_transform));
-    Transform::set_parent(&satellite_transform, Some(&moon_transform));
+    // Transform::set_parent(&planet_transform, Some(&sun_transform));
+    // Transform::set_parent(&moon_transform, Some(&planet_transform));
+    // Transform::set_parent(&satellite_transform, Some(&moon_transform));
     
     // Variables para interacción táctil
     let mut last_touch_pos = (0, 0);
@@ -741,11 +703,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Esperar hasta que sea tiempo del siguiente frame
         let now = Instant::now();
         let elapsed_since_last_frame = now - last_frame_time;
-        if elapsed_since_last_frame < frame_duration {
-            let sleep_time = frame_duration - elapsed_since_last_frame;
-            thread::sleep(sleep_time);
-            continue;
-        }
+        // if elapsed_since_last_frame < frame_duration {
+        //     let sleep_time = frame_duration - elapsed_since_last_frame;
+        //     thread::sleep(sleep_time);
+        //     continue;
+        // }
         // Calcular tiempo transcurrido para animación
         let elapsed = last_frame_time.elapsed().as_secs_f32();
         let elapse_since_start = start_time.elapsed().as_secs_f32();
@@ -824,67 +786,94 @@ fn main() -> Result<(), Box<dyn Error>> {
             sun.rotate_x(rotation_angle * 0.1);
             pipeline.set_model_transform(&mut sun);
         }
-        pipeline.render(&plane, None);
-        // Planeta (cubo orbitando)
-        {
-            let mut planet = planet_transform.borrow_mut();
-            planet.set_position_xyz(2.6 * (elapse_since_start * 0.5).cos(), 0.0, 2.6 * (elapse_since_start * 0.5).sin());
-            planet.set_uniform_scale(0.8);
-            planet.rotate_y(rotation_angle * 0.6);
-            pipeline.set_model_transform(&mut planet);
-        }
-        pipeline.render(&cube, checkerboard_texture);
-        // Luna (esfera orbitando el planeta)
-        {
-            let mut moon = moon_transform.borrow_mut();
-            moon.set_position_xyz(1.5 * elapse_since_start.cos(), 0.0, 1.5 * elapse_since_start.sin());
-            moon.set_uniform_scale(0.6);
-            moon.rotate_z(rotation_angle * 1.5);
-            pipeline.set_model_transform(&mut moon);
-        }
-        pipeline.render(&sphere, checkerboard_texture);
-        // Satélite (esfera pequeña orbitando la luna)
-        {
-            let mut satellite = satellite_transform.borrow_mut();
-            satellite.set_position_xyz(1.0 * elapse_since_start.cos(), 0.8 * elapse_since_start.sin(), 0.0);
-            satellite.set_uniform_scale(0.3);
-            satellite.rotate_y(rotation_angle * 2.5);
-            satellite.rotate_z(rotation_angle * 3.0);
-            pipeline.set_model_transform(&mut satellite);
-        }
-        pipeline.render(&sphere, checkerboard_texture);
+        pipeline.render_parallel(&plane, None);
+        // // Planeta (cubo orbitando)
+        // {
+        //     let mut planet = planet_transform.borrow_mut();
+        //     planet.set_position_xyz(2.6 * (elapse_since_start * 0.5).cos(), 0.0, 2.6 * (elapse_since_start * 0.5).sin());
+        //     planet.set_uniform_scale(0.8);
+        //     planet.rotate_y(rotation_angle * 0.6);
+        //     pipeline.set_model_transform(&mut planet);
+        // }
+        // pipeline.render_parallel(&cube, checkerboard_texture);
+        // // Luna (esfera orbitando el planeta)
+        // {
+        //     let mut moon = moon_transform.borrow_mut();
+        //     moon.set_position_xyz(1.5 * elapse_since_start.cos(), 0.0, 1.5 * elapse_since_start.sin());
+        //     moon.set_uniform_scale(0.6);
+        //     moon.rotate_z(rotation_angle * 1.5);
+        //     pipeline.set_model_transform(&mut moon);
+        // }
+        // pipeline.render_parallel(&sphere, checkerboard_texture);
+        // // Satélite (esfera pequeña orbitando la luna)
+        // {
+        //     let mut satellite = satellite_transform.borrow_mut();
+        //     satellite.set_position_xyz(1.0 * elapse_since_start.cos(), 0.8 * elapse_since_start.sin(), 0.0);
+        //     satellite.set_uniform_scale(0.3);
+        //     satellite.rotate_y(rotation_angle * 2.5);
+        //     satellite.rotate_z(rotation_angle * 3.0);
+        //     pipeline.set_model_transform(&mut satellite);
+        // }
+        // pipeline.render_parallel(&sphere, checkerboard_texture);
 
         let bytes_per_pixel = (fb.var_screen_info.bits_per_pixel / 8) as usize;
 
-        // Preparar un buffer con los datos del rasterizador
-        let mut frame_buffer = vec![0u8; width * height * bytes_per_pixel];
+        // // Preparar un buffer con los datos del rasterizador
+        // let mut frame_buffer = vec![0u8; width * height * bytes_per_pixel];
 
-        // Obtener el color buffer desde el pipeline para evitar problemas de préstamo
-        let color_buffer = pipeline.get_color_buffer();
+        // // Obtener el color buffer desde el pipeline para evitar problemas de préstamo
+        // let color_buffer = pipeline.get_color_buffer();
         
-        // Convertir datos del rasterizador al formato de framebuffer
-        for y in 0..height {
-            for x in 0..width {
-                let src_idx = y * width + x;
-                let dst_idx = (y * width + x) * bytes_per_pixel;
+        // // Convertir datos del rasterizador al formato de framebuffer
+        // for y in 0..height {
+        //     for x in 0..width {
+        //         let src_idx = y * width + x;
+        //         let dst_idx = (y * width + x) * bytes_per_pixel;
                 
-                let color = color_buffer[src_idx];
+        //         let color = color_buffer[src_idx];
                 
-                let r = ((color >> 16) & 0xFF) as u8;
-                let g = ((color >> 8) & 0xFF) as u8;
-                let b = (color & 0xFF) as u8;
+        //         let r = ((color >> 16) & 0xFF) as u8;
+        //         let g = ((color >> 8) & 0xFF) as u8;
+        //         let b = (color & 0xFF) as u8;
                 
-                frame_buffer[dst_idx] = b;
-                frame_buffer[dst_idx + 1] = g;
-                frame_buffer[dst_idx + 2] = r;
-                if bytes_per_pixel >= 4 {
-                    frame_buffer[dst_idx + 3] = 0;
-                }
-            }
-        }
+        //         frame_buffer[dst_idx] = b;
+        //         frame_buffer[dst_idx + 1] = g;
+        //         frame_buffer[dst_idx + 2] = r;
+        //         if bytes_per_pixel >= 4 {
+        //             frame_buffer[dst_idx + 3] = 0;
+        //         }
+        //     }
+        // }
 
         // En lugar de usar write_frame, vamos a escribir directamente al buffer activo
         // para manejar correctamente el doble buffering
+        // let buffer_offset = if fb.var_screen_info.yoffset == 0 {
+        //     // Escribir en el segundo buffer
+        //     fb.var_screen_info.yres as usize * fb.fix_screen_info.line_length as usize
+        // } else {
+        //     // Escribir en el primer buffer
+        //     0
+        // };
+
+        // // Obtener un slice mutable al framebuffer
+        // let fb_slice = &mut *fb.frame;
+
+        // // Copiar los datos en la posición correcta del buffer
+        // for y in 0..height {
+        //     for x in 0..width {
+        //         let src_idx = (y * width + x) * bytes_per_pixel;
+        //         let dst_idx = buffer_offset + (y * fb.fix_screen_info.line_length as usize) + (x * bytes_per_pixel);
+
+        //         // Comprobar que estamos dentro de los límites
+        //         if dst_idx + bytes_per_pixel <= fb_slice.len() && src_idx + bytes_per_pixel <= frame_buffer.len() {
+        //             for i in 0..bytes_per_pixel {
+        //                 fb_slice[dst_idx + i] = frame_buffer[src_idx + i];
+        //             }
+        //         }
+        //     }
+        // }
+
+        // Obtener slice mutable al framebuffer, ajustando el offset y el tamaño para el buffer activo
         let buffer_offset = if fb.var_screen_info.yoffset == 0 {
             // Escribir en el segundo buffer
             fb.var_screen_info.yres as usize * fb.fix_screen_info.line_length as usize
@@ -892,43 +881,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             // Escribir en el primer buffer
             0
         };
-
-        // Obtener un slice mutable al framebuffer
         let fb_slice = &mut *fb.frame;
-
-        // Copiar los datos en la posición correcta del buffer
-        for y in 0..height {
-            for x in 0..width {
-                let src_idx = (y * width + x) * bytes_per_pixel;
-                let dst_idx = buffer_offset + (y * fb.fix_screen_info.line_length as usize) + (x * bytes_per_pixel);
-
-                // Comprobar que estamos dentro de los límites
-                if dst_idx + bytes_per_pixel <= fb_slice.len() && src_idx + bytes_per_pixel <= frame_buffer.len() {
-                    for i in 0..bytes_per_pixel {
-                        fb_slice[dst_idx + i] = frame_buffer[src_idx + i];
-                    }
-                }
-            }
-        }
+        let fb_slice = &mut fb_slice[buffer_offset..buffer_offset + (height * fb.fix_screen_info.line_length as usize)];
+        
+        pipeline.write_color_buffer_to_framebuffer(fb_slice, fb.var_screen_info.xres, fb.var_screen_info.yres, bytes_per_pixel);
 
         // Configurar la información para hacer el pan (flip)
-        let mut var_info = fb.var_screen_info.clone();
-
-        // Alternar entre los dos buffers
-        if var_info.yoffset == 0 {
-            var_info.yoffset = var_info.yres;
+        if fb.var_screen_info.yoffset == 0 {
+            fb.var_screen_info.yoffset = fb.var_screen_info.yres;
         } else {
-            var_info.yoffset = 0;
+            fb.var_screen_info.yoffset = 0;
         }
 
         // Realizar el pan_display (equivalente a flip)
-        match Framebuffer::pan_display(&fb.device, &var_info) {
+        match Framebuffer::pan_display(&fb.device, &fb.var_screen_info) {
             Ok(_) => {},
             Err(e) => eprintln!("Error al hacer flip del framebuffer: {}", e)
         }
-
-        // Actualizar la información del framebuffer para el próximo frame
-        fb.var_screen_info = var_info;
     }
     
     println!("Demostración finalizada");

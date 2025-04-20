@@ -1,5 +1,7 @@
 // --- SIMD ---
 use core_simd::simd::f32x4;
+use core_simd::simd::f32x8;
+use core_simd::simd::cmp::SimdPartialOrd;
 use core_simd::simd::num::SimdFloat;
 
 #[derive(Copy, Clone, Debug)]
@@ -64,8 +66,8 @@ impl Vector {
         if len == 0.0 { return Self::new(); }
         Self { simd: self.simd / f32x4::splat(len) }
     }
-    pub fn distance(&self, other: &Self) -> f32 {
-        ((self.simd - other.simd) * (self.simd - other.simd)).reduce_sum().sqrt()
+    pub fn distance(&self) -> f32 {
+        ((self.simd) * (self.simd)).reduce_sum().sqrt()
     }
     pub fn distance_squared(&self, other: &Self) -> f32 {
         ((self.simd - other.simd) * (self.simd - other.simd)).reduce_sum()
@@ -610,18 +612,32 @@ impl Quaternion {
     }
 }
 
-// pub fn compute_barycentric_coordinates(point: [f32; 2], v0: [f32; 2], v1: [f32; 2], v2: [f32; 2]) -> (f32, f32, f32) {
-//     // Área del triángulo completo
-//     let area = (v1[0] - v0[0]) * (v2[1] - v0[1]) - (v2[0] - v0[0]) * (v1[1] - v0[1]);
-//     if area.abs() < 1e-6 {
-//         return (0.0, 0.0, 0.0);
-//     }
-//     // Coordenadas baricéntricas
-//     let alpha = ((v1[0] - point[0]) * (v2[1] - point[1]) - (v2[0] - point[0]) * (v1[1] - point[1])) / area;
-//     let beta  = ((v2[0] - point[0]) * (v0[1] - point[1]) - (v0[0] - point[0]) * (v2[1] - point[1])) / area;
-//     let gamma = 1.0 - alpha - beta;
-//     (alpha, beta, gamma)
-// }
+/// Calcula coordenadas baricéntricas para 8 puntos en paralelo (SIMD)
+pub fn compute_barycentric_coordinates_simd(
+    pxs: f32x8,
+    pys: f32x8,
+    v0: [f32; 2],
+    v1: [f32; 2],
+    v2: [f32; 2],
+) -> (f32x8, f32x8, f32x8) {
+    let v0x = f32x8::splat(v0[0]);
+    let v0y = f32x8::splat(v0[1]);
+    let v1x = f32x8::splat(v1[0]);
+    let v1y = f32x8::splat(v1[1]);
+    let v2x = f32x8::splat(v2[0]);
+    let v2y = f32x8::splat(v2[1]);
+    // Área del triángulo
+    let mut area = (v1x - v0x) * (v2y - v0y) - (v2x - v0x) * (v1y - v0y);
+    let mask = area.abs().simd_lt(f32x8::splat(1e-6)); // Use simd_lt for explicit mask generation
+    area = mask.select(f32x8::splat(1e-6), area); // Use mask.select
+    // Alpha
+    let alpha = ((v1x - pxs) * (v2y - pys) - (v2x - pxs) * (v1y - pys)) / area;
+    // Beta
+    let beta = ((v2x - pxs) * (v0y - pys) - (v0x - pxs) * (v2y - pys)) / area;
+    // Gamma
+    let gamma = f32x8::splat(1.0) - alpha - beta;
+    (alpha, beta, gamma)
+}
 
 pub fn compute_barycentric_coordinates(point: [f32; 2], v0: [f32; 2], v1: [f32; 2], v2: [f32; 2]) -> (f32, f32, f32) {
     // Usar SIMD para calcular vectores y productos cruzados 2D

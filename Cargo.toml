@@ -30,6 +30,7 @@ ctrlc = "3.2.5"  # Añadir dependencia para manejo de señales
 libc = "0.2"
 ddsfile = "0.5.2"
 bcndecode = "0.2.0"
+atomic_float = "0.1"
 
 [features]
 default = ["std", "simd"]  # Habilitamos simd por defecto
