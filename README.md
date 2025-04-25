@@ -31,8 +31,10 @@ SPUC3D es un motor de renderizado 3D por software escrito completamente en Rust.
 ## Requisitos
 
 *   **Rust**: Compilador de Rust y Cargo (generalmente instalados juntos).
-*   **Linux**: El sistema operativo debe ser Linux con acceso al framebuffer (`/dev/fb0`) y a los dispositivos de entrada (`/dev/input/*`).
-*   **Permisos**: Es posible que necesites permisos de superusuario o pertenecer a grupos específicos (`video`, `input`) para acceder al framebuffer y a los dispositivos de entrada.
+*   **Para la biblioteca `spuc3d`**: Ninguno específico del sistema operativo. La biblioteca principal es agnóstica al SO.
+*   **Para el ejemplo `rotating_cube` (y otros que usen framebuffer/input directo)**:
+    *   **Linux**: El sistema operativo debe ser Linux con acceso al framebuffer (`/dev/fb0`) y a los dispositivos de entrada (`/dev/input/*`).
+    *   **Permisos**: Es posible que necesites permisos de superusuario o pertenecer a grupos específicos (`video`, `input`) para acceder al framebuffer y a los dispositivos de entrada.
 
 ## Cómo Compilar y Ejecutar
 
