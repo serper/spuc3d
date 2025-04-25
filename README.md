@@ -42,7 +42,7 @@ Añade la siguiente línea a tu Cargo.toml:
 
 ```toml
 [dependencies]
-spuc3d = { git = "https://github.com/tuusuario/spuc3d" }
+spuc3d = { git = "https://github.com/serper/spuc3d" }
 
 ## Cómo Compilar y Ejecutar
 
