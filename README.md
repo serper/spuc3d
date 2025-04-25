@@ -75,3 +75,7 @@ SPUC3D es un motor de renderizado 3D por software escrito completamente en Rust.
 *   Optimizar aún más el rasterizador.
 *   Soporte para más formatos de modelos 3D.
 *   Mejorar el sistema de materiales y shaders.
+
+## Licencia
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
