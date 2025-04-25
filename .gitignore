@@ -29,6 +29,7 @@ Thumbs.db
 # Archivos de configuración local
 .env
 *.local
+.gitignore
 
 # Archivos de registro
 *.log
