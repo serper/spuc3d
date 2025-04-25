@@ -1,6 +1,5 @@
 // --- SIMD ---
 use core_simd::simd::f32x4;
-use core_simd::simd::f32x8;
 use core_simd::simd::cmp::SimdPartialOrd;
 use core_simd::simd::num::SimdFloat;
 
@@ -195,6 +194,27 @@ impl Matrix {
             self.elements[2].to_array(),
             self.elements[3].to_array(),
         ]
+    }
+
+    pub fn get(&self, row: usize, col: usize) -> f32 {
+        if row >= 4 || col >= 4 { panic!("Index out of bounds"); }
+        self.elements[row][col]
+    }
+
+    pub fn as_slice(&self) -> &[f32; 16] {
+        // Flatten the SIMD elements into a contiguous array
+        unsafe { &*(self.elements_as_flat_array().as_ptr() as *const [f32; 16]) }
+    }
+
+    fn elements_as_flat_array(&self) -> [f32; 16] {
+        let mut arr = [0.0; 16];
+        for i in 0..4 {
+            let row = self.elements[i].to_array();
+            for j in 0..4 {
+                arr[i * 4 + j] = row[j];
+            }
+        }
+        arr
     }
 
     pub fn multiply(&self, other: &Self) -> Self {
@@ -612,30 +632,30 @@ impl Quaternion {
     }
 }
 
-/// Calcula coordenadas baricéntricas para 8 puntos en paralelo (SIMD)
+/// Calcula coordenadas baricéntricas para 4 puntos en paralelo (SIMD)
 pub fn compute_barycentric_coordinates_simd(
-    pxs: f32x8,
-    pys: f32x8,
+    pxs: f32x4,
+    pys: f32x4,
     v0: [f32; 2],
     v1: [f32; 2],
     v2: [f32; 2],
-) -> (f32x8, f32x8, f32x8) {
-    let v0x = f32x8::splat(v0[0]);
-    let v0y = f32x8::splat(v0[1]);
-    let v1x = f32x8::splat(v1[0]);
-    let v1y = f32x8::splat(v1[1]);
-    let v2x = f32x8::splat(v2[0]);
-    let v2y = f32x8::splat(v2[1]);
+) -> (f32x4, f32x4, f32x4) {
+    let v0x = f32x4::splat(v0[0]);
+    let v0y = f32x4::splat(v0[1]);
+    let v1x = f32x4::splat(v1[0]);
+    let v1y = f32x4::splat(v1[1]);
+    let v2x = f32x4::splat(v2[0]);
+    let v2y = f32x4::splat(v2[1]);
     // Área del triángulo
     let mut area = (v1x - v0x) * (v2y - v0y) - (v2x - v0x) * (v1y - v0y);
-    let mask = area.abs().simd_lt(f32x8::splat(1e-6)); // Use simd_lt for explicit mask generation
-    area = mask.select(f32x8::splat(1e-6), area); // Use mask.select
+    let mask = area.abs().simd_lt(f32x4::splat(1e-6));
+    area = mask.select(f32x4::splat(1e-6), area);
     // Alpha
     let alpha = ((v1x - pxs) * (v2y - pys) - (v2x - pxs) * (v1y - pys)) / area;
     // Beta
     let beta = ((v2x - pxs) * (v0y - pys) - (v0x - pxs) * (v2y - pys)) / area;
     // Gamma
-    let gamma = f32x8::splat(1.0) - alpha - beta;
+    let gamma = f32x4::splat(1.0) - alpha - beta;
     (alpha, beta, gamma)
 }
 
@@ -658,7 +678,7 @@ pub fn compute_barycentric_coordinates(point: [f32; 2], v0: [f32; 2], v1: [f32; 
     }
     
     // Vectores desde vértices al punto
-    let v1_to_v2 = c - b;
+    // let v1_to_v2 = c - b;
     let p_to_a = a - p;
     let p_to_b = b - p;
     let p_to_c = c - p;

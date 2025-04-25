@@ -1,7 +1,7 @@
 use crate::renderer::texture::Texture;
 
 pub struct Vertex {
-    pub position: [f32; 3],
+    pub position: [f32; 4],
     pub normal: [f32; 3],
     pub tex_coords: [f32; 2],
     pub color: [f32; 4],
@@ -9,6 +9,15 @@ pub struct Vertex {
 
 impl Vertex {
     pub fn new(position: [f32; 3], normal: [f32; 3], tex_coords: [f32; 2], color: [f32; 4]) -> Self {
+        Self {
+            position: [position[0], position[1], position[2], 1.0],
+            normal,
+            tex_coords,
+            color,
+        }
+    }
+    // Nuevo constructor para [f32; 4]
+    pub fn new4(position: [f32; 4], normal: [f32; 3], tex_coords: [f32; 2], color: [f32; 4]) -> Self {
         Self {
             position,
             normal,
@@ -22,11 +31,12 @@ pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub diffuse_texture: Option<Texture>,
+    pub name: Option<String>,
 }
 
 impl Mesh {
-    pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>, diffuse_texture: Option<Texture>) -> Self {
-        Self { vertices, indices, diffuse_texture }
+    pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>, diffuse_texture: Option<Texture>, name: Option<String>) -> Self {
+        Self { vertices, indices, diffuse_texture, name }
     }
 
     pub fn get_vertex_count(&self) -> usize {

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 /// Estructura que representa una transformación en el espacio 3D
 /// Incluye posición, rotación y escala
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transform {
     // Componentes básicos de la transformación
     position: Vector,       // Posición en el espacio
@@ -58,6 +58,10 @@ impl Transform {
     #[inline]
     pub fn position(&self) -> &Vector {
         &self.position
+    }
+
+    pub fn get_matrix(&self) -> &Matrix {
+        &self.local_matrix
     }
     
     /// Establece la posición de la transformación

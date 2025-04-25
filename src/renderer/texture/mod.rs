@@ -1,13 +1,24 @@
+use std::path::Path;
+use std::io;
+
+#[derive(Clone)]
 pub struct Texture {
     pub width: u32,
     pub height: u32,
     pub data: Vec<u8>,
+    pub flip_v: bool,
+    pub flip_h: bool,
 }
 
 impl Texture {
     pub fn new(width: u32, height: u32, data: Vec<u8>) -> Self {
         assert_eq!(data.len(), (width * height * 4) as usize, "Data size does not match texture dimensions");
-        Self { width, height, data }
+        Self { width, height, data, flip_v: false, flip_h: false }
+    }
+
+    pub fn new_with_flip(width: u32, height: u32, data: Vec<u8>, flip_v: bool, flip_h: bool) -> Self {
+        assert_eq!(data.len(), (width * height * 4) as usize, "Data size does not match texture dimensions");
+        Self { width, height, data, flip_v, flip_h }
     }
 
     pub fn get_pixel(&self, x: u32, y: u32) -> [u8; 4] {
@@ -26,16 +37,14 @@ impl Texture {
     }    
     
     /// Obtiene un píxel interpolado usando coordenadas de textura normalizadas (0.0 a 1.0)
-    pub fn sample(&self, mut u: f32, mut v: f32) -> [f32; 4] {
-        // Asegurar que las coordenadas de textura estén en el rango [0.0, 1.0]
-        u = u.clamp(0.0, 1.0);
-        v = v.clamp(0.0, 1.0);
-        
-        // Convertir coordenadas de textura normalizadas a coordenadas de píxel
+    pub fn sample(&self, u: f32, v: f32) -> [f32; 4] {
+        // Modo mirrored repeat + flip configurable
+        let u = mirrored_repeat(u, self.flip_h);
+        let v = mirrored_repeat(v, self.flip_v);
+        let u = u.clamp(0.0, 1.0);
+        let v = v.clamp(0.0, 1.0);
         let x = u * (self.width as f32 - 1.0);
         let y = v * (self.height as f32 - 1.0);
-        
-        // Interpolación bilineal
         self.sample_bilinear(x, y)
     }
     
@@ -59,7 +68,9 @@ impl Texture {
         // Interpolación en X para la fila inferior
         let c1 = self.lerp_color(&c01, &c11, x_fract);
         // Interpolación en Y entre los resultados anteriores
-        self.lerp_color(&c0, &c1, y_fract)
+        let result = self.lerp_color(&c0, &c1, y_fract);
+        
+        result
     }
     
     /// Obtiene un píxel como valores flotantes (0.0 a 1.0)
@@ -87,7 +98,7 @@ impl Texture {
     pub fn create_empty(width: u32, height: u32) -> Self {
         let size = (width * height * 4) as usize;
         let data = vec![0; size];
-        Self { width, height, data }
+        Self { width, height, data, flip_v: false, flip_h: false }
     }
     
     /// Crea una textura de prueba con un patrón de tablero de ajedrez
@@ -107,5 +118,35 @@ impl Texture {
         }
         
         texture
+    }
+    
+    /// Carga una textura desde un archivo de imagen
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        // Cargar la imagen con crate image
+        let img = image::open(path)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        
+        let width = img.width();
+        let height = img.height();
+        
+        // Convertir a formato RGBA
+        let rgba_img = img.to_rgba8();
+        let pixels = rgba_img.into_raw();
+        
+        // Crear la textura
+        Ok(Self::new(width, height, pixels))
+    }
+}
+
+fn mirrored_repeat(t: f32, flip: bool) -> f32 {
+    let t_calc = if t.floor() % 2.0 == 0.0 {
+        t
+    } else {
+        t.fract()
+    };
+    if flip {
+        1.0 - t_calc.fract()
+    } else {
+        t_calc.fract()
     }
 }

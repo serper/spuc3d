@@ -2,9 +2,10 @@ use spuc3d::renderer::{core::{
     pipeline::Pipeline, rasterizer::Rasterizer, transform::Transform
 }, geometry::load_obj};
 use spuc3d::renderer::geometry::{Mesh, Vertex};
-use spuc3d::renderer::shader::DefaultShader;
+use spuc3d::renderer::shader::{DefaultShader, SimpleShader, MultiShader};
 use spuc3d::renderer::texture::Texture;
-use spuc3d::renderer::geometry::obj_loader;
+use spuc3d::renderer::core::pipeline::RenderMode;
+use spuc3d::renderer::font::Font;
 
 use std::{
     fs::{File, OpenOptions},
@@ -58,6 +59,12 @@ struct TouchInput {
     x: i32,
     y: i32,
     touch_active: bool,
+}
+
+// Definir variables estáticas para cachés de texto usando RefCell para interior mutability
+thread_local! {
+    static FPS_TEXT_CACHE: RefCell<Option<spuc3d::renderer::core::rasterizer::TextCache>> = RefCell::new(None);
+    static MODE_TEXT_CACHE: RefCell<Option<spuc3d::renderer::core::rasterizer::TextCache>> = RefCell::new(None);
 }
 
 // Implementación para entrada táctil
@@ -174,7 +181,7 @@ fn create_triangle() -> Mesh {
     let indices = vec![0, 1, 2];
 
     // Crear y devolver la malla
-    Mesh::new(vertices, indices, None)
+    Mesh::new(vertices, indices, None, None)
 }
 
 fn create_cube() -> Mesh {
@@ -209,7 +216,7 @@ fn create_cube() -> Mesh {
         1, 5, 6, 1, 6, 2,
     ];
 
-    Mesh::new(vertices, indices, None)
+    Mesh::new(vertices, indices, None, None)
 }
 
 // Función para crear una pirámide
@@ -218,25 +225,25 @@ fn create_pyramid() -> Mesh {
     let mut vertices = vec![
         // Base (cuadrado) - todos apuntando hacia abajo para la cara inferior
         Vertex {
-            position: [-0.5, -0.5, 0.0],  // 0: Inferior izquierda
+            position: [-0.5, -0.5, 0.0, 1.0],  // 0: Inferior izquierda
             normal: [0.0, 0.0, -1.0],     // Normal apuntando hacia abajo (-Z)
             tex_coords: [0.0, 0.0],
             color: [1.0, 0.0, 0.0, 1.0],  // Rojo
         },
         Vertex {
-            position: [0.5, -0.5, 0.0],   // 1: Inferior derecha
+            position: [0.5, -0.5, 0.0, 1.0],   // 1: Inferior derecha
             normal: [0.0, 0.0, -1.0],     // Normal apuntando hacia abajo (-Z)
             tex_coords: [1.0, 0.0],
             color: [0.0, 1.0, 0.0, 1.0],  // Verde
         },
         Vertex {
-            position: [0.5, 0.5, 0.0],    // 2: Superior derecha
+            position: [0.5, 0.5, 0.0, 1.0],    // 2: Superior derecha
             normal: [0.0, 0.0, -1.0],     // Normal apuntando hacia abajo (-Z)
             tex_coords: [1.0, 1.0],
             color: [0.0, 0.0, 1.0, 1.0],  // Azul
         },
         Vertex {
-            position: [-0.5, 0.5, 0.0],   // 3: Superior izquierda
+            position: [-0.5, 0.5, 0.0, 1.0],   // 3: Superior izquierda
             normal: [0.0, 0.0, -1.0],     // Normal apuntando hacia abajo (-Z)
             tex_coords: [0.0, 1.0],
             color: [1.0, 1.0, 0.0, 1.0],  // Amarillo
@@ -246,19 +253,19 @@ fn create_pyramid() -> Mesh {
     // Para las caras laterales, necesitamos vértices adicionales con normales específicas
     // Frente
     vertices.push(Vertex {
-        position: [-0.5, -0.5, 0.0],
+        position: [-0.5, -0.5, 0.0, 1.0],
         normal: [-0.4472, -0.4472, 0.7746],  // Normal de la cara frontal
         tex_coords: [0.0, 0.0],
         color: [1.0, 0.0, 0.0, 1.0],
     });
     vertices.push(Vertex {
-        position: [0.5, -0.5, 0.0],
+        position: [0.5, -0.5, 0.0, 1.0],
         normal: [-0.4472, -0.4472, 0.7746],
         tex_coords: [1.0, 0.0],
         color: [0.0, 1.0, 0.0, 1.0],
     });
     vertices.push(Vertex {
-        position: [0.0, 0.0, 1.0],
+        position: [0.0, 0.0, 1.0, 1.0],
         normal: [-0.4472, -0.4472, 0.7746],
         tex_coords: [0.5, 0.5],
         color: [1.0, 1.0, 1.0, 1.0],
@@ -266,19 +273,19 @@ fn create_pyramid() -> Mesh {
     
     // Derecha
     vertices.push(Vertex {
-        position: [0.5, -0.5, 0.0],
+        position: [0.5, -0.5, 0.0, 1.0],
         normal: [0.4472, -0.4472, 0.7746],  // Normal de la cara derecha
         tex_coords: [0.0, 0.0],
         color: [0.0, 1.0, 0.0, 1.0],
     });
     vertices.push(Vertex {
-        position: [0.5, 0.5, 0.0],
+        position: [0.5, 0.5, 0.0, 1.0],
         normal: [0.4472, -0.4472, 0.7746],
         tex_coords: [1.0, 0.0],
         color: [0.0, 0.0, 1.0, 1.0],
     });
     vertices.push(Vertex {
-        position: [0.0, 0.0, 1.0],
+        position: [0.0, 0.0, 1.0, 1.0],
         normal: [0.4472, -0.4472, 0.7746],
         tex_coords: [0.5, 0.5],
         color: [1.0, 1.0, 1.0, 1.0],
@@ -286,19 +293,19 @@ fn create_pyramid() -> Mesh {
     
     // Atrás
     vertices.push(Vertex {
-        position: [0.5, 0.5, 0.0],
+        position: [0.5, 0.5, 0.0, 1.0],
         normal: [0.4472, 0.4472, 0.7746],  // Normal de la cara trasera
         tex_coords: [0.0, 0.0],
         color: [0.0, 0.0, 1.0, 1.0],
     });
     vertices.push(Vertex {
-        position: [-0.5, 0.5, 0.0],
+        position: [-0.5, 0.5, 0.0, 1.0],
         normal: [0.4472, 0.4472, 0.7746],
         tex_coords: [1.0, 0.0],
         color: [1.0, 1.0, 0.0, 1.0],
     });
     vertices.push(Vertex {
-        position: [0.0, 0.0, 1.0],
+        position: [0.0, 0.0, 1.0, 1.0],
         normal: [0.4472, 0.4472, 0.7746],
         tex_coords: [0.5, 0.5],
         color: [1.0, 1.0, 1.0, 1.0],
@@ -306,19 +313,19 @@ fn create_pyramid() -> Mesh {
     
     // Izquierda
     vertices.push(Vertex {
-        position: [-0.5, 0.5, 0.0],
+        position: [-0.5, 0.5, 0.0, 1.0],
         normal: [-0.4472, 0.4472, 0.7746],  // Normal de la cara izquierda
         tex_coords: [0.0, 0.0],
         color: [1.0, 1.0, 0.0, 1.0],
     });
     vertices.push(Vertex {
-        position: [-0.5, -0.5, 0.0],
+        position: [-0.5, -0.5, 0.0, 1.0],
         normal: [-0.4472, 0.4472, 0.7746],
         tex_coords: [1.0, 0.0],
         color: [1.0, 0.0, 0.0, 1.0],
     });
     vertices.push(Vertex {
-        position: [0.0, 0.0, 1.0],
+        position: [0.0, 0.0, 1.0, 1.0],
         normal: [-0.4472, 0.4472, 0.7746],
         tex_coords: [0.5, 0.5],
         color: [1.0, 1.0, 1.0, 1.0],
@@ -336,7 +343,7 @@ fn create_pyramid() -> Mesh {
         13, 14, 15, // Izquierda
     ];
 
-    Mesh::new(vertices, indices, None)
+    Mesh::new(vertices, indices, None, None)
 }
 
 // Función para crear una esfera (aproximada con un icosaedro)
@@ -382,7 +389,8 @@ fn create_sphere(radius: f32, subdivisions: u32) -> Mesh {
         let position = [
             normal[0] * radius,
             normal[1] * radius,
-            normal[2] * radius
+            normal[2] * radius,
+            1.0 // Homogeneizado
         ];
         
         // Coordenadas de textura esféricas
@@ -469,7 +477,7 @@ fn create_sphere(radius: f32, subdivisions: u32) -> Mesh {
         indices.push(i3 as u32);
     }
 
-    Mesh::new(vertices, indices, None)
+    Mesh::new(vertices, indices, None, None)
 }
 
 // Función auxiliar para crear un punto medio entre dos vértices (para la esfera)
@@ -512,6 +520,7 @@ fn add_midpoint(
         normal[0] * radius,
         normal[1] * radius,
         normal[2] * radius,
+        1.0 // Homogeneizado
     ];
 
     // Coordenadas de textura (aproximadas)
@@ -584,11 +593,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Configuramos el logger
     spuc3d::init();
     
+    use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
     // Para poder detener el programa con Ctrl+C
-    let mut running = true;
+    let running = Arc::new(AtomicBool::new(true));
+    let running_ctrlc = running.clone();
     ctrlc::set_handler(move || {
         println!("Deteniendo el programa...");
-        running = false;
+        running_ctrlc.store(false, Ordering::SeqCst);
         std::process::exit(0);
     })?;
     println!("Iniciando el programa...");
@@ -632,17 +643,37 @@ fn main() -> Result<(), Box<dyn Error>> {
     
     // Crear rasterizador ajustado a la resolución del framebuffer
     let mut rasterizer = Rasterizer::new(width as u32, height as u32);
-    let enabled = false;
     let color: u32 = 0xFF0000; // Color rojo
-    rasterizer.set_wireframe(enabled, Some(color)); // Color rojo para wireframe
+    rasterizer.set_wireframe_color(Some(color)); // Color rojo para wireframe
     let clear_color = 0x000022; // Azul muy oscuro
     
-    // Crear shader
-    let shader = DefaultShader::new();
-    
-    // Crear pipeline con una referencia mutable al rasterizador (sin clonar)
-    let mut pipeline = Pipeline::new(shader, &mut rasterizer);
-    
+    // Crear pipeline con el shader de iluminación
+    // let mut pipeline = Pipeline::new(
+    //     Box::new(SimpleShader {
+    //         light_dir: [0.3, -1.0, 0.7], // Luz desde la cámara hacia la escena
+    //         light_color: [1.0, 1.0, 1.0],
+    //         ambient: [0.30, 0.30, 0.30],
+    //         specular_strength: 0.5,
+    //         shininess: 16.0,
+    //         view_pos: [0.0, 0.0, 5.0], // Debe coincidir con la posición de la cámara
+    //     }),
+    //     &mut rasterizer
+    // );
+    let mut pipeline = Pipeline::new(
+        Box::new(DefaultShader::new()),
+        &mut rasterizer
+    );
+    // let mut pipeline = Pipeline::new(
+    //     Box::new(MultiShader::new()),
+    //     &mut rasterizer
+    // );
+
+    // Si quieres cambiar el modo de renderizado:
+    // pipeline.set_render_mode(RenderMode::Texture); // o .Color, .Wireframe
+    // Si quieres cambiar el shader en tiempo de ejecución:
+    // pipeline.set_shader(Box::new(DefaultShader::new()));
+    pipeline.set_render_mode(RenderMode::Texture);
+
     // Posicionar la cámara en el eje Z negativo para contrarrestar la inversión de la matriz de vista
     let eye = [0.0, 0.0, 4.0];
     let target = [0.0, 0.0, 0.0];
@@ -660,8 +691,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let cube = create_cube();
     // let pyramid = create_pyramid();
     // let sphere = create_sphere(0.5, 2); // Radio 0.5, 1 subdivisión
-    let plane = load_obj("airplane.obj", true, false)?;
+    // let plane = load_obj("airplane.obj", true, false)?;
+    let earth = load_obj("airplane.obj", true, false)?;
+    let stormtrooper = load_obj("stormtrooper.obj", true, false)?;
     
+    // Crear una fuente simple para mostrar texto
+    let atlas_texture = Texture::load_from_file("font/dejavu_sans.png")?;
+    let font = match Font::load_bmfont_with_texture("font/dejavu_sans.fnt", atlas_texture) {
+        Ok(font) => font,
+        Err(e) => {
+            println!("Error al cargar la fuente: {}", e);
+            // Puedes usar una fuente de respaldo en caso de error
+            Font::create_simple_font()
+        }
+    };
+
     // // Crear textura de tablero de ajedrez
     // let texture_enabled = true; // Cambiar a true para usar la textura
     // let checkerboard_texture_data = create_checkerboard_texture(256, 256);
@@ -674,7 +718,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Crear transformaciones para objetos como Rc<RefCell<Transform>>
     let root_transform = Transform::new();
     let sun_transform = Transform::new();
-    // let planet_transform = Transform::new();
+    let planet_transform = Transform::new();
     // let moon_transform = Transform::new();
     // let satellite_transform = Transform::new();
     
@@ -693,37 +737,82 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Para medir el tiempo y controlar FPS
     let start_time = Instant::now();
     let mut last_frame_time = Instant::now();
-    let frame_duration = Duration::from_millis(16); // ~60 FPS
+    // let frame_duration = Duration::from_millis(16); // ~60 FPS
     
-    // Bucle de animación
-    let mut frames_count = 0;
+    // Medir FPS
     let mut last_fps_time = Instant::now();
+    let mut last_fps_count = 0;
 
-    while running {
+    while running.load(Ordering::SeqCst) {
         // Esperar hasta que sea tiempo del siguiente frame
         let now = Instant::now();
-        let elapsed_since_last_frame = now - last_frame_time;
+        // let elapsed_since_last_frame = now - last_frame_time;
         // if elapsed_since_last_frame < frame_duration {
         //     let sleep_time = frame_duration - elapsed_since_last_frame;
         //     thread::sleep(sleep_time);
         //     continue;
         // }
+
+        // Cambiar el shader de DefaultShader, SimpleShader y MultiShader en cada uno de los modos cada 5 segundos
+        // Cuando se pasan por los tres shaders, cambiar el modo de renderizado
+        {
+            static mut LAST_SWITCH: Option<Instant> = None;
+            static mut CURRENT_SHADER: u8 = 0;
+            static mut CURRENT_MODE: u8 = 0;
+            
+            let now = Instant::now();
+            let elapsed = start_time.elapsed();
+            let should_switch = unsafe {
+                match LAST_SWITCH {
+                    Some(last) => elapsed - (last - start_time) >= Duration::from_secs(5),
+                    None => true,
+                }
+            };
+            
+            if should_switch {
+                unsafe {
+                    // Cambiar de shader (0: Default, 1: Simple, 2: Multi)
+                    CURRENT_SHADER = (CURRENT_SHADER + 1) % 3;
+                    
+                    // Si completamos ciclo de shaders, cambiar modo
+                    if CURRENT_SHADER == 0 {
+                        CURRENT_MODE = (CURRENT_MODE + 1) % 3;
+                        
+                        // Actualizar modo de renderizado
+                        match CURRENT_MODE {
+                            0 => pipeline.set_render_mode(RenderMode::Wireframe),
+                            1 => pipeline.set_render_mode(RenderMode::Color),
+                            _ => pipeline.set_render_mode(RenderMode::Texture),
+                        }
+                        
+                        println!("Cambiando modo de renderizado a: {:?}", pipeline.get_render_mode_string());
+                    }
+                    
+                    // Actualizar shader según el índice actual
+                    match CURRENT_SHADER {
+                        0 => pipeline.set_shader(Box::new(DefaultShader::new())),
+                        1 => pipeline.set_shader(Box::new(SimpleShader::new_default())),
+                        _ => pipeline.set_shader(Box::new(MultiShader::new())),
+                    }
+                    
+                    println!("Cambiando a shader {} con modo {:?}", 
+                             match CURRENT_SHADER { 0 => "DefaultShader", 1 => "SimpleShader", _ => "MultiShader" },
+                             pipeline.get_render_mode_string());
+                    
+                    LAST_SWITCH = Some(now);
+                }
+            }
+        }
+
         // Calcular tiempo transcurrido para animación
         let elapsed = last_frame_time.elapsed().as_secs_f32();
         let elapse_since_start = start_time.elapsed().as_secs_f32();
 
+        let delta_time = elapsed;
         last_frame_time = now;
-        frames_count += 1;
-
-        if now.duration_since(last_fps_time).as_secs() >= 1 {
-            println!("FPS: {}", frames_count);
-            frames_count = 0;
-            last_fps_time = now;
-        }
-        
+        last_fps_count += 1;
 
         // Calcular los grados a rotar dependiendo del tiempo desde el último frame
-        let delta_time = elapsed - last_frame_time.elapsed().as_secs_f32();
         let rotation_speed = 0.5; // Grados por segundo
         let rotation_angle = rotation_speed * delta_time;
         
@@ -781,21 +870,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Sol (esfera central)
         {
             let mut sun = sun_transform.borrow_mut();
-            sun.set_uniform_scale(0.022);
+            // sun.set_uniform_scale(0.022);
+            sun.set_uniform_scale(0.6);
+            sun.set_position_xyz(0.0, -1.0, 0.0);
             sun.rotate_y(rotation_angle * 0.2);
             sun.rotate_x(rotation_angle * 0.1);
             pipeline.set_model_transform(&mut sun);
         }
-        pipeline.render_parallel(&plane, None);
-        // // Planeta (cubo orbitando)
-        // {
-        //     let mut planet = planet_transform.borrow_mut();
-        //     planet.set_position_xyz(2.6 * (elapse_since_start * 0.5).cos(), 0.0, 2.6 * (elapse_since_start * 0.5).sin());
-        //     planet.set_uniform_scale(0.8);
-        //     planet.rotate_y(rotation_angle * 0.6);
-        //     pipeline.set_model_transform(&mut planet);
-        // }
-        // pipeline.render_parallel(&cube, checkerboard_texture);
+        pipeline.render(&stormtrooper);
+        // Planeta (cubo orbitando)
+        {
+            let mut planet = planet_transform.borrow_mut();
+            planet.set_position_xyz(2.6 * (elapse_since_start * 0.5).cos(), 0.0, 2.6 * (elapse_since_start * 0.5).sin());
+            planet.set_uniform_scale(0.01);
+            planet.rotate_y(-rotation_angle);
+            pipeline.set_model_transform(&mut planet);
+        }
+        pipeline.render(&earth);
         // // Luna (esfera orbitando el planeta)
         // {
         //     let mut moon = moon_transform.borrow_mut();
@@ -815,76 +906,107 @@ fn main() -> Result<(), Box<dyn Error>> {
         //     pipeline.set_model_transform(&mut satellite);
         // }
         // pipeline.render_parallel(&sphere, checkerboard_texture);
+    
+        {
+            static mut LAST_FPS_PRINT: Option<Instant> = None;
+            let now = Instant::now();
+            let elapsed = last_fps_time.elapsed().as_secs_f32();
+            let fps = last_fps_count as f32 / elapsed;
+            static mut LAST_FPS: f32 = 0.0;
+            
+            let should_print = unsafe {
+                match LAST_FPS_PRINT {
+                    Some(last) => now.duration_since(last) >= Duration::from_secs(1),
+                    None => true,
+                }
+            };
+
+            if should_print {
+                if elapsed > 0.0 {
+                    println!("FPS: {:.2}", fps);
+                    unsafe {
+                        LAST_FPS = fps;
+                    }
+                }
+                last_fps_count = 0;
+                last_fps_time = now;
+                unsafe {
+                    LAST_FPS_PRINT = Some(now);
+                }
+            }
+            
+            // Mostrar texto en pantalla (coordenadas 2D) con diferentes ángulos para probar
+            FPS_TEXT_CACHE.with(|cache| {
+                let fps_val = unsafe { LAST_FPS };
+                pipeline.rasterizer.draw_text_matrix_transform_cached(
+                    650, 40, 
+                    &format!("FPS: {:.2}", fps_val), 
+                    &font, 
+                    0xFFFF00, 
+                    1.0, 
+                    0.0,
+                    &mut *cache.borrow_mut()
+                );
+            });
+            
+            // pipeline.rasterizer.draw_text_matrix_transform(300, 480, "Texto con espaciado uniforme", &font, 0x00FFFF, 1.2, std::f32::consts::PI / -3.0);
+            
+            // Usar caché para el texto de modo y shader (solo cambia cada 5 segundos)
+            let mode_shader_text = format!("Mode: {:?} | Shader: {}", 
+                pipeline.get_render_mode_string(), 
+                pipeline.shader.get_shader_name()
+            );
+            
+            MODE_TEXT_CACHE.with(|cache| {
+                pipeline.rasterizer.draw_text_matrix_transform_cached(
+                    400, 460,
+                    &mode_shader_text,
+                    &font,
+                    0x00FFFF,
+                    1.0,
+                    0.0,
+                    &mut *cache.borrow_mut()
+                );
+            });
+        }
+
+        
+        // // Mostrar texto en el mundo 3D (sobre los objetos)
+        // pipeline.draw_text_3d(&[0.0, 1.5, 0.0], "Stormtrooper", &font, 0xFF00FF);
+        // pipeline.draw_text_3d(&[2.6, 0.5, 0.0], "Ship", &font, 0x00FF00);
 
         let bytes_per_pixel = (fb.var_screen_info.bits_per_pixel / 8) as usize;
 
-        // // Preparar un buffer con los datos del rasterizador
-        // let mut frame_buffer = vec![0u8; width * height * bytes_per_pixel];
-
-        // // Obtener el color buffer desde el pipeline para evitar problemas de préstamo
-        // let color_buffer = pipeline.get_color_buffer();
-        
-        // // Convertir datos del rasterizador al formato de framebuffer
-        // for y in 0..height {
-        //     for x in 0..width {
-        //         let src_idx = y * width + x;
-        //         let dst_idx = (y * width + x) * bytes_per_pixel;
-                
-        //         let color = color_buffer[src_idx];
-                
-        //         let r = ((color >> 16) & 0xFF) as u8;
-        //         let g = ((color >> 8) & 0xFF) as u8;
-        //         let b = (color & 0xFF) as u8;
-                
-        //         frame_buffer[dst_idx] = b;
-        //         frame_buffer[dst_idx + 1] = g;
-        //         frame_buffer[dst_idx + 2] = r;
-        //         if bytes_per_pixel >= 4 {
-        //             frame_buffer[dst_idx + 3] = 0;
-        //         }
-        //     }
-        // }
-
-        // En lugar de usar write_frame, vamos a escribir directamente al buffer activo
-        // para manejar correctamente el doble buffering
-        // let buffer_offset = if fb.var_screen_info.yoffset == 0 {
-        //     // Escribir en el segundo buffer
-        //     fb.var_screen_info.yres as usize * fb.fix_screen_info.line_length as usize
-        // } else {
-        //     // Escribir en el primer buffer
-        //     0
-        // };
-
-        // // Obtener un slice mutable al framebuffer
-        // let fb_slice = &mut *fb.frame;
-
-        // // Copiar los datos en la posición correcta del buffer
-        // for y in 0..height {
-        //     for x in 0..width {
-        //         let src_idx = (y * width + x) * bytes_per_pixel;
-        //         let dst_idx = buffer_offset + (y * fb.fix_screen_info.line_length as usize) + (x * bytes_per_pixel);
-
-        //         // Comprobar que estamos dentro de los límites
-        //         if dst_idx + bytes_per_pixel <= fb_slice.len() && src_idx + bytes_per_pixel <= frame_buffer.len() {
-        //             for i in 0..bytes_per_pixel {
-        //                 fb_slice[dst_idx + i] = frame_buffer[src_idx + i];
-        //             }
-        //         }
-        //     }
-        // }
-
         // Obtener slice mutable al framebuffer, ajustando el offset y el tamaño para el buffer activo
         let buffer_offset = if fb.var_screen_info.yoffset == 0 {
-            // Escribir en el segundo buffer
             fb.var_screen_info.yres as usize * fb.fix_screen_info.line_length as usize
         } else {
-            // Escribir en el primer buffer
             0
         };
         let fb_slice = &mut *fb.frame;
         let fb_slice = &mut fb_slice[buffer_offset..buffer_offset + (height * fb.fix_screen_info.line_length as usize)];
         
         pipeline.write_color_buffer_to_framebuffer(fb_slice, fb.var_screen_info.xres, fb.var_screen_info.yres, bytes_per_pixel);
+        // // Copiar el color buffer al framebuffer respetando el stride
+        // let color_buffer = pipeline.get_color_buffer();
+        // for y in 0..height {
+        //     let src_start = y * width;
+        //     let src_slice = &color_buffer[src_start..src_start + width];
+        //     let dst_start = y * fb.fix_screen_info.line_length as usize;
+        //     let dst_bytes = &mut fb_slice[dst_start..dst_start + width * bytes_per_pixel];
+        //     for (i, &color) in src_slice.iter().enumerate() {
+        //         let r = ((color >> 16) & 0xFF) as u8;
+        //         let g = ((color >> 8) & 0xFF) as u8;
+        //         let b = (color & 0xFF) as u8;
+        //         let base = i * bytes_per_pixel;
+        //         dst_bytes[base] = b;
+        //         dst_bytes[base + 1] = g;
+        //         dst_bytes[base + 2] = r;
+        //         if bytes_per_pixel >= 4 {
+        //             dst_bytes[base + 3] = 0;
+        //         }
+        //     }
+        // }
 
         // Configurar la información para hacer el pan (flip)
         if fb.var_screen_info.yoffset == 0 {
@@ -906,7 +1028,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 // Función para guardar un frame como imagen (no implementada)
 #[allow(dead_code)]
-fn save_frame(buffer: &[u32], width: u32, height: u32, filename: String) {
+fn save_frame(_buffer: &[u32], _width: u32, _height: u32, filename: String) {
     // Esta función requeriría una biblioteca como 'image' para guardar el buffer como PNG
     println!("Guardando frame como {}", filename);
 }

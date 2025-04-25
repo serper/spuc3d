@@ -10,9 +10,6 @@ license = "MIT"
 [dependencies]
 core_simd = { git = "https://github.com/rust-lang/portable-simd" }
 framebuffer = "0.3.1"
-# Matemáticas y álgebra lineal
-nalgebra = "0.32.3"
-glam = "0.24.1"
 
 # Multiprocesamiento y paralelismo
 rayon = "1.8.0"
@@ -31,6 +28,7 @@ libc = "0.2"
 ddsfile = "0.5.2"
 bcndecode = "0.2.0"
 atomic_float = "0.1"
+num_cpus = "1.16.0"
 
 [features]
 default = ["std", "simd"]  # Habilitamos simd por defecto
@@ -54,4 +52,6 @@ panic = "abort"  # Reducir tamaño binario y mejorar rendimiento
 [target.armv7-unknown-linux-musleabihf]
 rustflags = [
   "-C", "target-feature=+neon",
+  "-C", "opt-level=2",  # Añadir optimización de nivel 2
 ]
+  

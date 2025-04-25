@@ -15,6 +15,7 @@ pub mod renderer {
     pub mod geometry;
     pub mod shader;
     pub mod texture;
+    pub mod font;
 }
 
 /// Inicializa la librería y configura el logger
