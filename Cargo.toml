@@ -21,7 +21,7 @@ image = "0.24.7"
 thiserror = "1.0.47"
 log = "0.4.20"
 env_logger = "0.10.0"
-ctrlc = "3.2.5"  # Añadir dependencia para manejo de señales
+ctrlc = "3.2.5"
 
 # FFI y sistema operativo
 libc = "0.2"
@@ -33,7 +33,7 @@ num_cpus = "1.16.0"
 [features]
 default = ["std", "simd"]  # Habilitamos simd por defecto
 std = []
-simd = []  # Esta característica activará código optimizado para NEON cuando esté disponible
+simd = []
 
 [profile.dev]
 opt-level = 0
@@ -44,14 +44,14 @@ overflow-checks = true
 # Optimizaciones específicas para ARM
 [profile.release]
 opt-level = 3
-lto = "fat"  # Link Time Optimization más agresiva
+lto = "fat" 
 codegen-units = 1
-panic = "abort"  # Reducir tamaño binario y mejorar rendimiento
+panic = "abort"
 
 # Configuración específica para target ARM
 [target.armv7-unknown-linux-musleabihf]
 rustflags = [
   "-C", "target-feature=+neon",
-  "-C", "opt-level=2",  # Añadir optimización de nivel 2
+  "-C", "opt-level=2",
 ]
   

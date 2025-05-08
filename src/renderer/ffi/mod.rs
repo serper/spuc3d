@@ -26,12 +26,8 @@ pub struct PipelineContext<'a> {
 pub extern "C" fn create_pipeline_context(width: u32, height: u32) -> *mut PipelineContext<'static> {
     let rasterizer = Box::new(Rasterizer::new(width, height));
     // Obtenemos un puntero crudo al rasterizer para pasarlo al pipeline.
-    // Es seguro porque el rasterizer vivirá tanto como el PipelineContext.
     let rasterizer_ptr: *mut Rasterizer = Box::into_raw(rasterizer);
 
-    // Creamos el pipeline usando el puntero crudo.
-    // El lifetime 'a se convierte en 'static aquí, lo cual es una simplificación
-    // para FFI, asumiendo que el contexto se gestiona correctamente desde C.
     let pipeline = Box::new(Pipeline::new(
         Box::new(DefaultShader::new()),
         unsafe { &mut *rasterizer_ptr }, // Reconstruimos la referencia mutable
@@ -52,8 +48,6 @@ pub extern "C" fn destroy_pipeline_context(context: *mut PipelineContext) {
         return;
     }
     unsafe {
-        // Simplemente dropear el Box del contexto se encargará de dropear
-        // el pipeline y el rasterizer en el orden correcto.
         drop(Box::from_raw(context));
     }
 }
@@ -216,8 +210,6 @@ pub extern "C" fn transform_set_position(transform: *mut Transform, x: f32, y: f
 pub extern "C" fn transform_set_rotation_euler(transform: *mut Transform, x_radians: f32, y_radians: f32, z_radians: f32) {
     if transform.is_null() { return; }
     let transform = unsafe { &mut *transform };
-    // Nota: Transform usa Quaternions internamente. Convertimos Euler a Quaternion.
-    // Esta es una conversión simple, puede que necesites ajustar el orden ZYX, XYZ, etc.
     let qx = crate::renderer::core::math::Quaternion::from_axis_angle([1.0, 0.0, 0.0], x_radians);
     let qy = crate::renderer::core::math::Quaternion::from_axis_angle([0.0, 1.0, 0.0], y_radians);
     let qz = crate::renderer::core::math::Quaternion::from_axis_angle([0.0, 0.0, 1.0], z_radians);

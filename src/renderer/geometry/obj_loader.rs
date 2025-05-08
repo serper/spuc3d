@@ -191,7 +191,6 @@ pub fn load_obj(path: &str, flip_v: bool, flip_h: bool) -> Result<Scene, String>
                                 .and_then(|mat| materials.get(mat))
                                 .map(|mat| mat.diffuse)
                                 .unwrap_or([1.0, 1.0, 1.0, 1.0]);
-                            // Al cargar vértices desde OBJ, asegúrate de que position es [f32; 4] (w=1.0)
                             let vertex = Vertex::new4([
                                 pos[0],
                                 pos[1],

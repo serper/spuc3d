@@ -600,9 +600,6 @@ impl Rasterizer {
         });
     }
 
-    /// Dibuja texto con transformación matricial para mayor precisión en el espaciado
-    /// Esta implementación alternativa renderiza primero el texto normalmente y luego 
-    /// aplica la transformación al conjunto completo
     pub fn draw_text_matrix_transform(
         &mut self, 
         x: i32, 
@@ -612,9 +609,8 @@ impl Rasterizer {
         color: u32,
         scale: f32,
         rotation: f32
-    ) -> TextCache {// Incluso sin rotación, usamos el mismo método para mantener consistencia en el renderizado
-        // Esto corrige el problema de caracteres extraños en rotación 0°
-        if false { // Desactivamos este camino para siempre usar la transformación de buffer
+    ) -> TextCache {
+        if false {
             let mut cursor_x = x;
             let mut cursor_y = y;
             
@@ -676,7 +672,8 @@ impl Rasterizer {
                     cursor_x += (glyph.advance as f32 * scale) as i32;
                 }
             }
-              // Crear y devolver una TextCache para el texto renderizado sin transformación
+            
+            // Crear y devolver una TextCache para el texto renderizado sin transformación
             // Estimar ancho basado en el texto y altura de línea (ya que no tenemos max_width)
             let avg_char_width = font.line_height as u32 / 2; // Estimación simple de ancho
             let scaled_width = text.len() as u32 * avg_char_width;
@@ -1075,7 +1072,6 @@ impl Rasterizer {
         scale: f32,
         rotation: f32
     ) -> TextCache {
-        // Reutilizamos la lógica de draw_text_matrix_transform, pero sin dibujar en la pantalla
         // Determinar las dimensiones del texto
         let mut text_width = 0;
         let mut text_height = font.line_height;
@@ -1242,7 +1238,6 @@ impl Rasterizer {
         // Ahora dibujar el texto en la posición de pantalla calculada        // Dibujar el texto y descartar el valor de retorno
         let _ = self.draw_text_matrix_transform(screen_x, screen_y, text, font, color, depth_scale, rotation);
         
-        // Devolver true para indicar que el texto fue dibujado
         true
     }
 }

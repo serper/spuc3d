@@ -36,12 +36,6 @@ struct TimeVal {
     tv_usec: isize,
 }
 
-// // Constantes para ioctl
-// const FBIOGET_VSCREENINFO: u64 = 0x4600;
-// const FBIOPUT_VSCREENINFO: u64 = 0x4601;
-// const FBIOGET_FSCREENINFO: u64 = 0x4602;
-// const FBIOPAN_DISPLAY: u64 = 0x4606;
-
 // Constantes para eventos de entrada
 const EV_ABS: u16 = 0x03;
 const ABS_X: u16 = 0x00;
@@ -250,8 +244,6 @@ fn create_pyramid() -> Mesh {
         },
     ];
     
-    // Para las caras laterales, necesitamos vértices adicionales con normales específicas
-    // Frente
     vertices.push(Vertex {
         position: [-0.5, -0.5, 0.0, 1.0],
         normal: [-0.4472, -0.4472, 0.7746],  // Normal de la cara frontal
@@ -336,7 +328,7 @@ fn create_pyramid() -> Mesh {
         // Base (cuadrado) - en sentido antihorario para OpenGL
         0, 1, 2, 
         0, 2, 3,
-        // Caras laterales (triángulos) - Usando los nuevos vértices con normales correctas
+        // Caras laterales (triángulos)
         4, 5, 6,  // Frente
         7, 8, 9,  // Derecha
         10, 11, 12, // Atrás
@@ -647,31 +639,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     rasterizer.set_wireframe_color(Some(color)); // Color rojo para wireframe
     let clear_color = 0x000022; // Azul muy oscuro
     
-    // Crear pipeline con el shader de iluminación
-    // let mut pipeline = Pipeline::new(
-    //     Box::new(SimpleShader {
-    //         light_dir: [0.3, -1.0, 0.7], // Luz desde la cámara hacia la escena
-    //         light_color: [1.0, 1.0, 1.0],
-    //         ambient: [0.30, 0.30, 0.30],
-    //         specular_strength: 0.5,
-    //         shininess: 16.0,
-    //         view_pos: [0.0, 0.0, 5.0], // Debe coincidir con la posición de la cámara
-    //     }),
-    //     &mut rasterizer
-    // );
     let mut pipeline = Pipeline::new(
         Box::new(DefaultShader::new()),
         &mut rasterizer
     );
-    // let mut pipeline = Pipeline::new(
-    //     Box::new(MultiShader::new()),
-    //     &mut rasterizer
-    // );
-
-    // Si quieres cambiar el modo de renderizado:
-    // pipeline.set_render_mode(RenderMode::Texture); // o .Color, .Wireframe
-    // Si quieres cambiar el shader en tiempo de ejecución:
-    // pipeline.set_shader(Box::new(DefaultShader::new()));
     pipeline.set_render_mode(RenderMode::Texture);
 
     // Posicionar la cámara en el eje Z negativo para contrarrestar la inversión de la matriz de vista
@@ -681,10 +652,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     pipeline.look_at(&eye, &target, &up);
     
     // Configurar la proyección con parámetros adecuados
-    let fov = std::f32::consts::PI / 4.0; // 30 grados (más estrecho para mejor visualización)
+    let fov = std::f32::consts::PI / 4.0; // 45 grados
     let aspect_ratio = width as f32 / height as f32;
-    let near = 0.1; // Aumentar el plano cercano para evitar problemas de clipping
-    let far = 10.0; // Reducir el plano lejano para mejorar la precisión del z-buffer
+    let near = 0.1;
+    let far = 10.0;
     pipeline.set_perspective(fov, aspect_ratio, near, far);
     
     // Crear las geometrías
@@ -753,8 +724,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         //     continue;
         // }
 
-        // Cambiar el shader de DefaultShader, SimpleShader y MultiShader en cada uno de los modos cada 5 segundos
-        // Cuando se pasan por los tres shaders, cambiar el modo de renderizado
         {
             static mut LAST_SWITCH: Option<Instant> = None;
             static mut CURRENT_SHADER: u8 = 0;
@@ -1029,6 +998,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 // Función para guardar un frame como imagen (no implementada)
 #[allow(dead_code)]
 fn save_frame(_buffer: &[u32], _width: u32, _height: u32, filename: String) {
-    // Esta función requeriría una biblioteca como 'image' para guardar el buffer como PNG
+    // TODO: Implementar la función para guardar el buffer como imagen
     println!("Guardando frame como {}", filename);
 }

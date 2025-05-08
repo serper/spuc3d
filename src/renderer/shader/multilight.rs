@@ -170,7 +170,7 @@ impl MultiShader {
                     (dir, light.intensity * attenuation)
                 },
                 LightType::Spot => {
-                    // No implementado completamente, tratamos como direccional por ahora
+                    // No implementado completamente, tratamos como direccional
                     ([-light.direction[0], -light.direction[1], -light.direction[2]], light.intensity)
                 }
             };
@@ -308,7 +308,6 @@ impl Shader for MultiShader {
         let world_position = [input.world_position[0], input.world_position[1], input.world_position[2]];
         
         // Dirección de vista (desde punto hacia cámara)
-        // En implementación completa, calcular desde posición de cámara
         let view_dir = [0.0, 0.0, 1.0];
         
         // Calcular iluminación completa con todas las luces y sombras

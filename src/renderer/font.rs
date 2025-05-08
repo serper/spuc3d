@@ -257,8 +257,6 @@ impl Font {
     /// Carga una fuente desde un archivo binario BMFont (.bin)
     pub fn load_bmfont_binary<P: AsRef<Path>>(bin_path: P, texture_path: Option<P>) -> io::Result<Self> {
         // Implementación para formato binario BMFont
-        // Este formato es más complejo y requeriría un parser binario específico
-        // Por ahora, devolver un error
         Err(io::Error::new(io::ErrorKind::Unsupported, "BMFont binary format not supported yet"))
     }
 }
